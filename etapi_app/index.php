@@ -164,7 +164,10 @@
     
     <!-- ТОВАРЫ И ПОДЗАДАЧИ -->
     <div style="background:#f8f9fa; padding:20px; margin-top:30px; border-top:2px solid #dee2e6;">
-        <h5 style="margin-bottom:16px;"><i class="bi bi-box2"></i> Товары и подзадачи по этапам</h5>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <h5 class="mb-0"><i class="bi bi-box2"></i> Товары и подзадачи по этапам</h5>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadStageProductsEtapi()"><i class="bi bi-arrow-clockwise"></i> Обновить</button>
+        </div>
         <div id="productsPanel"></div>
     </div>
 </div>
@@ -374,9 +377,10 @@ function loadDataJS() {
         }
         items.sort((a,b) => (parseInt(a.sort)||0) - (parseInt(b.sort)||0));
         $('#statusBadge').text("Items: " + items.length);
-        if(items.length > 0) { $('#emptyState').hide(); items.forEach(item => render(item)); } 
+        if(items.length > 0) { $('#emptyState').hide(); items.forEach(item => render(item)); }
         else { $('#emptyState').show(); render(); }
         nums(); propagateDates(); recalcAll();
+        loadStageProductsEtapi();
     });
     $('#rows').sortable({handle:'.drag-handle', update:nums});
 }
@@ -578,7 +582,7 @@ function save() {
 function loadStageProductsEtapi() {
     const panel = document.getElementById('productsPanel');
     panel.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
-    
+
     // Собираем ID всех этапов и метаданные для отображения
     const stageIds = [];
     const stageMeta = {};
@@ -600,7 +604,7 @@ function loadStageProductsEtapi() {
     });
     
     if (!stageIds.length) {
-        panel.innerHTML = '<p style="color:#999">Нет этапов</p>';
+        panel.innerHTML = '<p style="color:#999">Нет этапов с ID — товары не подтянуты</p>';
         return;
     }
     
@@ -621,7 +625,7 @@ function loadStageProductsEtapi() {
         const products = res.data().items || [];
         
         if (!products.length) {
-            panel.innerHTML = '<p style="color:#999">Нет товаров</p>';
+            panel.innerHTML = '<p style="color:#999">Нет товаров, связанных с этапами</p>';
             return;
         }
         
@@ -850,8 +854,6 @@ function renderSubtaskItem(st) {
     `;
 }
 
-// Загружаем товары при инициализации
-setTimeout(() => { loadStageProductsEtapi(); }, 1000);
 </script>
 </body>
 </html>
