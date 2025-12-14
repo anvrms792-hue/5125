@@ -56,6 +56,23 @@
         .subtask-info-etapi { flex: 1; }
         .subtask-title-etapi { font-weight: 500; color: #212529; }
         .subtask-type-etapi { display: inline-block; background: #eef2ff; color: #0d6efd; padding: 1px 4px; border-radius: 3px; margin-top: 2px; font-size: 10px; }
+        .product-status-etapi { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+        .status-badge-etapi { padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 600; border: 1px solid #e9ecef; background: #f8f9fa; color: #495057; }
+        .status-badge-etapi.status-success { background: #e6f4ea; border-color: #badbcc; color: #198754; }
+        .status-badge-etapi.status-danger { background: #fde8e8; border-color: #f5c2c7; color: #dc3545; }
+        .status-badge-etapi.status-warning { background: #fff3cd; border-color: #ffecb5; color: #996c00; }
+        .status-badge-etapi.status-info { background: #e7f1ff; border-color: #b6d4fe; color: #0d6efd; }
+        .status-badge-etapi.status-muted { background: #f8f9fa; border-color: #e9ecef; color: #6c757d; }
+        .progress-etapi { height: 6px; background: #f1f3f5; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+        .progress-etapi .progress-bar { background: linear-gradient(90deg, #0d6efd, #20c997); }
+        .subtask-meta-etapi { display: flex; gap: 8px; font-size: 10px; color: #6c757d; margin-top: 2px; align-items: center; }
+        .subtask-status-pill { padding: 1px 6px; border-radius: 4px; border: 1px solid #e9ecef; background: #fff; font-weight: 600; }
+        .subtask-status-pill.status-success { background: #e6f4ea; border-color: #badbcc; color: #198754; }
+        .subtask-status-pill.status-danger { background: #fde8e8; border-color: #f5c2c7; color: #dc3545; }
+        .subtask-status-pill.status-warning { background: #fff3cd; border-color: #ffecb5; color: #996c00; }
+        .subtask-status-pill.status-info { background: #e7f1ff; border-color: #b6d4fe; color: #0d6efd; }
+        .subtask-status-pill.status-muted { background: #f8f9fa; border-color: #e9ecef; color: #6c757d; }
+        .subtask-due-etapi { display: inline-flex; align-items: center; gap: 4px; color: #0d6efd; }
     </style>
 </head>
 <body>
@@ -147,7 +164,10 @@
     
     <!-- ТОВАРЫ И ПОДЗАДАЧИ -->
     <div style="background:#f8f9fa; padding:20px; margin-top:30px; border-top:2px solid #dee2e6;">
-        <h5 style="margin-bottom:16px;"><i class="bi bi-box2"></i> Товары и подзадачи по этапам</h5>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <h5 class="mb-0"><i class="bi bi-box2"></i> Товары и подзадачи по этапам</h5>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadStageProductsEtapi()"><i class="bi bi-arrow-clockwise"></i> Обновить</button>
+        </div>
         <div id="productsPanel"></div>
     </div>
 </div>
@@ -357,9 +377,10 @@ function loadDataJS() {
         }
         items.sort((a,b) => (parseInt(a.sort)||0) - (parseInt(b.sort)||0));
         $('#statusBadge').text("Items: " + items.length);
-        if(items.length > 0) { $('#emptyState').hide(); items.forEach(item => render(item)); } 
+        if(items.length > 0) { $('#emptyState').hide(); items.forEach(item => render(item)); }
         else { $('#emptyState').show(); render(); }
         nums(); propagateDates(); recalcAll();
+        loadStageProductsEtapi();
     });
     $('#rows').sortable({handle:'.drag-handle', update:nums});
 }
@@ -561,21 +582,29 @@ function save() {
 function loadStageProductsEtapi() {
     const panel = document.getElementById('productsPanel');
     panel.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> Загрузка...</div>';
-    
-    // Собираем ID всех этапов
+
+    // Собираем ID всех этапов и метаданные для отображения
     const stageIds = [];
+    const stageMeta = {};
     document.querySelectorAll('.grid-row[data-id]').forEach(row => {
         const type = row.querySelector('.inp-type').value;
         if (type === 'calendar_stage') {
             const id = row.getAttribute('data-id');
             if (id && !id.startsWith('new_')) {
-                stageIds.push(parseInt(id));
+                const intId = parseInt(id);
+                stageIds.push(intId);
+                stageMeta[intId] = {
+                    name: row.querySelector('.inp-name').value || 'Этап',
+                    start: row.querySelector('.inp-start').value,
+                    end: row.querySelector('.inp-end').value,
+                    num: row.querySelector('.num')?.textContent || ''
+                };
             }
         }
     });
     
     if (!stageIds.length) {
-        panel.innerHTML = '<p style="color:#999">Нет этапов</p>';
+        panel.innerHTML = '<p style="color:#999">Нет этапов с ID — товары не подтянуты</p>';
         return;
     }
     
@@ -589,13 +618,14 @@ function loadStageProductsEtapi() {
             'ufCrm110_1765572860',  // DEADLINE_JURE
             'ufCrm110_1765572878',  // STATUS_JURE
             'ufCrm110_1765572889',  // DEADLINE_FACTO
-            'ufCrm110_1765572898'   // STATUS_FACTO
+            'ufCrm110_1765572898',  // STATUS_FACTO
+            'ufCrm110_1765572811'   // LINK_STAGE
         ]
     }, function(res) {
         const products = res.data().items || [];
         
         if (!products.length) {
-            panel.innerHTML = '<p style="color:#999">Нет товаров</p>';
+            panel.innerHTML = '<p style="color:#999">Нет товаров, связанных с этапами</p>';
             return;
         }
         
@@ -619,54 +649,211 @@ function loadStageProductsEtapi() {
                 if (!subtasksByProduct[prodId]) subtasksByProduct[prodId] = [];
                 subtasksByProduct[prodId].push(st);
             });
-            
-            panel.innerHTML = products.map(prod => `
-                <div class="etapi-product-card" data-product-id="${prod.id}">
-                    <div class="product-header-etapi" onclick="toggleProductEtapi(this.closest('.etapi-product-card'))">
-                        <div class="product-title-etapi">
-                            <span class="product-toggle-etapi">▸</span>
-                            <span>${prod.title || 'Товар'}</span>
+
+            const groupedByStage = {};
+            products.forEach(prod => {
+                const stageId = parseInt(prod.ufCrm110_1765572811) || null;
+                if (!groupedByStage[stageId]) groupedByStage[stageId] = [];
+                groupedByStage[stageId].push(prod);
+            });
+
+            const renderedStages = stageIds.map(stageId => {
+                const meta = stageMeta[stageId] || {};
+                const prods = groupedByStage[stageId] || [];
+                const stageTitle = meta.num ? `${meta.num}. ${meta.name || 'Этап'}` : (meta.name || 'Этап');
+                const headDates = [meta.start, meta.end].filter(Boolean).map(formatDate).join(' → ');
+                const stageHeader = `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="fw-bold" style="font-size:12px;">
+                            <i class="bi bi-diagram-3"></i> ${stageTitle}
+                            ${headDates ? `<span class="text-muted" style="font-size:10px;">(${headDates})</span>` : ''}
                         </div>
-                        <span style="font-size:11px; color:#6c757d;">${(subtasksByProduct[prod.id] || []).length} подзадач</span>
-                    </div>
-                    <div class="product-deadlines-etapi">
-                        <div class="deadline-box-etapi">
-                            <div class="deadline-label-etapi">Де-Юре</div>
-                            <div class="deadline-date-etapi">${formatDate(prod.ufCrm110_1765572860)}</div>
-                        </div>
-                        <div class="deadline-box-etapi">
-                            <div class="deadline-label-etapi">Де-Факто</div>
-                            <div class="deadline-date-etapi">${formatDate(prod.ufCrm110_1765572889)}</div>
-                        </div>
-                    </div>
-                    <div class="subtasks-container-etapi">
-                        ${(subtasksByProduct[prod.id] || []).map(st => `
-                            <div class="subtask-item-etapi">
-                                <input type="checkbox" class="subtask-checkbox-etapi">
-                                <div class="subtask-info-etapi">
-                                    <div class="subtask-title-etapi">${st.title}</div>
-                                    <div class="subtask-type-etapi">${st.ufCrm112_1765573009 || 'Прочее'}</div>
+                        <span class="badge bg-light text-secondary border" style="font-size:10px;">${prods.length} товар(ов)</span>
+                    </div>`;
+
+                const cards = prods.length
+                    ? prods.map(prod => {
+                        const prodSubtasks = subtasksByProduct[prod.id] || [];
+                        const { done, total } = getSubtaskProgress(prodSubtasks);
+                        const progressHtml = total ? renderSubtaskProgress(done, total) : '';
+                        return `
+                            <div class="etapi-product-card" data-product-id="${prod.id}">
+                                <div class="product-header-etapi" onclick="toggleProductEtapi(this.closest('.etapi-product-card'))">
+                                    <div class="product-title-etapi">
+                                        <span class="product-toggle-etapi">▸</span>
+                                        <span>${prod.title || 'Товар'}</span>
+                                    </div>
+                                    <span style="font-size:11px; color:#6c757d;">${prodSubtasks.length} подзадач</span>
                                 </div>
+                                <div class="product-deadlines-etapi">
+                                    <div class="deadline-box-etapi">
+                                        <div class="deadline-label-etapi">Де-Юре</div>
+                                        <div class="deadline-date-etapi">${formatDate(prod.ufCrm110_1765572860)}</div>
+                                    </div>
+                                    <div class="deadline-box-etapi">
+                                        <div class="deadline-label-etapi">Де-Факто</div>
+                                        <div class="deadline-date-etapi">${formatDate(prod.ufCrm110_1765572889)}</div>
+                                    </div>
+                                </div>
+                                <div class="product-status-etapi">
+                                    ${renderStatusBadge('Де-Юре', prod.ufCrm110_1765572878)}
+                                    ${renderStatusBadge('Де-Факто', prod.ufCrm110_1765572898)}
+                                    ${renderDelayBadge(prod.ufCrm110_1765572860, prod.ufCrm110_1765572889)}
+                                </div>
+                                ${progressHtml}
+                                <div class="subtasks-container-etapi">
+                                    ${prodSubtasks.map(renderSubtaskItem).join('')}
+                                </div>
+                            </div>`;
+                    }).join('')
+                    : '<div class="text-muted" style="font-size:11px;">Товаров нет</div>';
+
+                return `<div class="mb-3">${stageHeader}${cards}</div>`;
+            });
+
+            // Добавляем товары без найденного этапа (на случай рассинхронизации)
+            const unknownStageIds = Object.keys(groupedByStage)
+                .map(id => parseInt(id))
+                .filter(id => !stageIds.includes(id));
+
+            unknownStageIds.forEach(id => {
+                const prods = groupedByStage[id] || [];
+                if (!prods.length) return;
+                renderedStages.push(`
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="fw-bold" style="font-size:12px;">
+                                <i class="bi bi-diagram-3"></i> Без привязки к этапу
                             </div>
-                        `).join('')}
+                            <span class="badge bg-light text-secondary border" style="font-size:10px;">${prods.length} товар(ов)</span>
+                        </div>
+                        ${prods.map(prod => {
+                            const prodSubtasks = subtasksByProduct[prod.id] || [];
+                            const { done, total } = getSubtaskProgress(prodSubtasks);
+                            const progressHtml = total ? renderSubtaskProgress(done, total) : '';
+                            return `
+                                <div class="etapi-product-card" data-product-id="${prod.id}">
+                                    <div class="product-header-etapi" onclick="toggleProductEtapi(this.closest('.etapi-product-card'))">
+                                        <div class="product-title-etapi">
+                                            <span class="product-toggle-etapi">▸</span>
+                                            <span>${prod.title || 'Товар'}</span>
+                                        </div>
+                                        <span style="font-size:11px; color:#6c757d;">${prodSubtasks.length} подзадач</span>
+                                    </div>
+                                    <div class="product-deadlines-etapi">
+                                        <div class="deadline-box-etapi">
+                                            <div class="deadline-label-etapi">Де-Юре</div>
+                                            <div class="deadline-date-etapi">${formatDate(prod.ufCrm110_1765572860)}</div>
+                                        </div>
+                                        <div class="deadline-box-etapi">
+                                            <div class="deadline-label-etapi">Де-Факто</div>
+                                            <div class="deadline-date-etapi">${formatDate(prod.ufCrm110_1765572889)}</div>
+                                        </div>
+                                    </div>
+                                    <div class="product-status-etapi">
+                                        ${renderStatusBadge('Де-Юре', prod.ufCrm110_1765572878)}
+                                        ${renderStatusBadge('Де-Факто', prod.ufCrm110_1765572898)}
+                                        ${renderDelayBadge(prod.ufCrm110_1765572860, prod.ufCrm110_1765572889)}
+                                    </div>
+                                    ${progressHtml}
+                                    <div class="subtasks-container-etapi">
+                                        ${prodSubtasks.map(renderSubtaskItem).join('')}
+                                    </div>
+                                </div>`;
+                        }).join('')}
                     </div>
-                </div>
-            `).join('');
+                `);
+            });
+
+            panel.innerHTML = renderedStages.join('');
         });
     });
 }
 
 function toggleProductEtapi(el) {
     el.classList.toggle('expanded');
+    const toggle = el.querySelector('.product-toggle-etapi');
+    if (toggle) toggle.textContent = el.classList.contains('expanded') ? '▾' : '▸';
 }
 
-function formatDate(s) { 
-    try { return s ? new Date(s).toLocaleDateString() : '-'; } 
-    catch(e) { return s; } 
+function formatDate(s) {
+    try { return s ? new Date(s).toLocaleDateString() : '-'; }
+    catch(e) { return s; }
 }
 
-// Загружаем товары при инициализации
-setTimeout(() => { loadStageProductsEtapi(); }, 1000);
+function normalizeStatus(val) {
+    return (val || '').toString().trim().toLowerCase();
+}
+
+function mapStatusToColor(status) {
+    const v = normalizeStatus(status);
+    if(['done','completed','success','готово','выполнено','закрыто'].includes(v)) return 'success';
+    if(['overdue','late','просрочка'].includes(v)) return 'danger';
+    if(['in progress','process','progress','в работе'].includes(v)) return 'info';
+    if(['paused','hold','ожидание','pending'].includes(v)) return 'warning';
+    return 'muted';
+}
+
+function renderStatusBadge(label, value) {
+    const cls = mapStatusToColor(value);
+    const text = value || 'Нет статуса';
+    return `<span class="status-badge-etapi status-${cls}">${label}: ${text}</span>`;
+}
+
+function diffInDays(base, fact) {
+    if(!base || !fact) return null;
+    const b = new Date(base); const f = new Date(fact);
+    if(isNaN(b) || isNaN(f)) return null;
+    return Math.round((f - b) / 86400000);
+}
+
+function renderDelayBadge(jureDate, factoDate) {
+    const delta = diffInDays(jureDate, factoDate);
+    if(delta === null) return '';
+    const cls = delta > 0 ? 'danger' : delta < 0 ? 'success' : 'info';
+    const label = delta === 0 ? 'Без сдвига' : (delta > 0 ? `Просрочка ${delta}д` : `Опережение ${Math.abs(delta)}д`);
+    return `<span class="status-badge-etapi status-${cls}">${label}</span>`;
+}
+
+function isDoneStatus(status) {
+    return ['done','completed','success','готово','выполнено','закрыто'].includes(normalizeStatus(status));
+}
+
+function getSubtaskProgress(list) {
+    const total = list.length;
+    let done = 0;
+    list.forEach(st => { if(isDoneStatus(st.ufCrm112_1765573037)) done++; });
+    return { done, total };
+}
+
+function renderSubtaskProgress(done, total) {
+    const percent = total ? Math.round((done / total) * 100) : 0;
+    return `
+        <div class="progress progress-etapi" title="Подзадачи: ${done}/${total}">
+            <div class="progress-bar" role="progressbar" style="width:${percent}%" aria-valuenow="${done}" aria-valuemin="0" aria-valuemax="${total}"></div>
+        </div>
+    `;
+}
+
+function renderSubtaskItem(st) {
+    const statusText = st.ufCrm112_1765573037 || 'Нет статуса';
+    const statusCls = mapStatusToColor(statusText);
+    const due = st.ufCrm112_1765573073 ? `<span class="subtask-due-etapi"><i class="bi bi-calendar-event"></i>${formatDate(st.ufCrm112_1765573073)}</span>` : '';
+    return `
+        <div class="subtask-item-etapi">
+            <input type="checkbox" class="subtask-checkbox-etapi" ${isDoneStatus(statusText) ? 'checked' : ''} disabled>
+            <div class="subtask-info-etapi">
+                <div class="subtask-title-etapi">${st.title}</div>
+                <div class="subtask-type-etapi">${st.ufCrm112_1765573009 || 'Прочее'}</div>
+                <div class="subtask-meta-etapi">
+                    <span class="subtask-status-pill status-${statusCls}">${statusText}</span>
+                    ${due}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 </script>
 </body>
 </html>
