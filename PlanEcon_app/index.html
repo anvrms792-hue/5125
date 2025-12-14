@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Плановая экономика</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="//api.bitrix24.com/api/v1/"></script>
+
+    <style>
+        /* GLOBAL */
+        body { font-size: 0.85rem; background-color: #f8f9fa; margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+        [v-cloak] { display: none; }
+        #app { display: flex; flex-direction: column; height: 100%; }
+
+        /* HEADER */
+        .app-header { flex-shrink: 0; background: white; z-index: 100; border-bottom: 1px solid #dee2e6; }
+        .filters-toolbar { background: #f8f9fa; padding: 8px 15px; border-bottom: 1px solid #dee2e6; display: flex; gap: 15px; align-items: center; }
+        .filter-group { display: flex; align-items: center; gap: 5px; background: #fff; padding: 4px 8px; border-radius: 6px; border: 1px solid #ced4da; }
+        .filter-group input, .filter-group select { border: none; background: transparent; font-size: 0.85rem; padding: 2px 5px; box-shadow: none; outline: none; color: #495057; }
+
+        /* GRID */
+        .grid-container { flex-grow: 1; display: flex; width: 100%; align-items: stretch; overflow: hidden; position: relative; }
+        .month-col { flex: 1 1 0; min-width: 0; border-right: 1px solid #dee2e6; background: #fff; display: flex; flex-direction: column; height: 100%; }
+        .month-header { flex-shrink: 0; text-align: center; padding: 8px 2px; border-bottom: 1px solid #dee2e6; background: #fff; z-index: 10; }
+        
+        .month-totals { display: flex; flex-direction: column; gap: 1px; }
+        .total-row { display: flex; justify-content: center; align-items: center; font-size: 0.75rem; }
+        .total-label { color: #999; margin-right: 4px; font-size: 0.65rem; text-transform: uppercase; font-weight: 600; }
+        .total-plan { color: #6c757d; font-weight: 500; }
+        .total-fact { font-weight: bold; font-size: 0.8rem; }
+
+        .month-body { flex-grow: 1; overflow-y: auto; overflow-x: hidden; padding: 6px; -webkit-overflow-scrolling: touch; }
+        .month-body::-webkit-scrollbar { width: 4px; }
+        .month-body::-webkit-scrollbar-thumb { background: #ced4da; border-radius: 4px; }
+
+        /* CARDS */
+        .item-card { cursor: pointer; padding: 8px 10px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #eee; transition: transform 0.1s; font-size: 0.75rem; background: white; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .item-card:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-color: #adb5bd; z-index: 5; }
+        .type-expense { border-left: 3px solid #dc3545; background: #fffbfb; }
+        .type-income { border-left: 3px solid #198754; background: #f8fff9; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; margin-left: auto; }
+        .status-paid { background-color: #198754; box-shadow: 0 0 3px #198754; } 
+        .status-partial { background-color: #fd7e14; }
+        .status-unpaid { background-color: #dc3545; opacity: 0.2; }
+        .text-success-dark { color: #0f5132; } .text-danger-dark { color: #842029; }
+        .text-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* MODALS */
+        #companyModal { z-index: 1070 !important; }
+        .modal-backdrop { z-index: 1050; } 
+        .company-list-container { max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; }
+        .company-item { padding: 8px 12px; border-bottom: 1px solid #f1f1f1; cursor: pointer; transition: background 0.1s; }
+        .company-item:hover { background: #e9ecef; }
+
+        @media (max-width: 991.98px) {
+            .grid-container { display: block; }
+            .filters-toolbar { display: none; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px; }
+            .filters-toolbar.show-mobile { display: flex; }
+            .filter-group { width: 100%; }
+            .mobile-month-nav { display: flex !important; align-items: center; justify-content: space-between; background: #fff; padding: 10px 15px; border-bottom: 1px solid #dee2e6; flex-shrink: 0; }
+            .month-col { display: none !important; width: 100%; border-right: none; height: 100%; }
+            .month-col.active-mobile { display: flex !important; }
+            .month-header { display: none; }
+        }
+        .mobile-month-nav { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="app" v-cloak>
+    <!-- HEADER -->
+    <div class="app-header">
+        <div class="p-2 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" @click="changeYear(-1)"><i class="bi bi-chevron-left"></i></button>
+                    <span class="btn btn-light disabled fw-bold text-dark" style="min-width: 50px;">{{ year }}</span>
+                    <button class="btn btn-outline-secondary" @click="changeYear(1)"><i class="bi bi-chevron-right"></i></button>
+                </div>
+                <div class="d-flex flex-column ms-2" style="font-size: 0.75rem; line-height: 1.2;">
+                    <div class="text-muted">План: <span class="fw-bold text-dark">{{ formatMoney(yearTotal.plan) }}</span></div>
+                    <div>Факт: <span class="fw-bold" :class="yearTotal.fact >= 0 ? 'text-success' : 'text-danger'">{{ formatMoney(yearTotal.fact) }}</span></div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary btn-sm d-lg-none" @click="showFiltersMobile = !showFiltersMobile" :class="{'active': showFiltersMobile}"><i class="bi bi-funnel"></i></button>
+                <button class="btn btn-primary btn-sm" @click="openBatchModal"><i class="bi bi-calendar-range"></i> <span class="d-none d-md-inline">Массовое</span></button>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-danger" @click="openCreateModal('expense')"><i class="bi bi-dash-circle"></i><span class="d-none d-sm-inline"> Расход</span></button>
+                    <button class="btn btn-success" @click="openCreateModal('income')"><i class="bi bi-plus-circle"></i><span class="d-none d-sm-inline"> Доход</span></button>
+                </div>
+            </div>
+        </div>
+        <div class="filters-toolbar" :class="{ 'show-mobile': showFiltersMobile }">
+            <div class="filter-group flex-grow-1">
+                <i class="bi bi-search text-muted"></i>
+                <input type="text" class="w-100" placeholder="Поиск контрагента..." v-model="filters.search">
+                <i class="bi bi-x cursor-pointer text-muted" v-if="filters.search" @click="filters.search = ''"></i>
+            </div>
+            <div class="filter-group"><span class="text-muted small fw-bold">Тип:</span><select v-model="filters.type"><option value="all">Все</option><option value="income">Доход</option><option value="expense">Расход</option></select></div>
+            <div class="filter-group"><span class="text-muted small fw-bold">Статус:</span><select v-model="filters.status"><option value="all">Любой</option><option value="paid">Проведен</option><option value="partial">Частично</option><option value="unpaid">Не оплачен</option></select></div>
+            <div class="vr d-none d-lg-block mx-1"></div>
+            <div class="filter-group ms-auto-lg"><i class="bi bi-sort-down text-muted"></i><select v-model="filters.sort"><option value="date">По дате</option><option value="amount_desc">Сумма (Больше)</option><option value="amount_asc">Сумма (Меньше)</option></select></div>
+            <div class="text-muted small text-nowrap d-none d-lg-block">{{ filteredCount }} шт.</div>
+        </div>
+    </div>
+
+    <!-- LOADING -->
+    <div v-if="loading" class="d-flex flex-column justify-content-center align-items-center flex-grow-1 text-muted" style="height: 100%;">
+        <div class="spinner-border spinner-border-sm me-2 mb-2"></div>
+        <div>Загрузка данных...</div>
+        <div class="small mt-1 text-secondary">Получено: {{ loadCounter }}</div>
+    </div>
+
+    <!-- GRID -->
+    <div v-else class="grid-container">
+        <div class="mobile-month-nav">
+            <button class="btn btn-sm btn-outline-secondary border-0" @click="changeActiveMonth(-1)"><i class="bi bi-chevron-left fs-4"></i></button>
+            <div class="text-center">
+                <div class="fw-bold fs-6">{{ monthNames[activeMobileMonth] }}</div>
+                <div class="d-flex gap-3 small mt-1">
+                    <span class="text-muted">План: {{ formatMoney(months[activeMobileMonth].plan) }}</span>
+                    <span :class="months[activeMobileMonth].fact >= 0 ? 'text-success-dark' : 'text-danger-dark'">Факт: {{ formatMoney(months[activeMobileMonth].fact) }}</span>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary border-0" @click="changeActiveMonth(1)"><i class="bi bi-chevron-right fs-4"></i></button>
+        </div>
+
+        <div v-for="(month, index) in months" :key="index" class="month-col" :class="{ 'active-mobile': index === activeMobileMonth }" v-show="isDesktop || index === activeMobileMonth">
+            <div class="month-header">
+                <div class="fw-bold mb-1">{{ monthNames[index] }}</div>
+                <div class="month-totals">
+                    <div class="total-row"><span class="total-label">PLAN</span><span class="total-plan">{{ formatMoney(month.plan) }}</span></div>
+                    <div class="total-row"><span class="total-label">FACT</span><span class="total-fact" :class="month.fact >= 0 ? 'text-success-dark' : 'text-danger-dark'">{{ formatMoney(month.fact) }}</span></div>
+                </div>
+            </div>
+            <div class="month-body">
+                <div v-for="item in month.items" :key="item.uKey" class="item-card" :class="item.type === 'income' ? 'type-income' : 'type-expense'" @click="showDetails(item)">
+                    <div class="d-flex align-items-center mb-1">
+                        <span class="fw-bold text-dark">{{ formatMoney(item.amount) }}</span>
+                        <span class="status-dot" :class="'status-' + item.status" :title="item.statusText"></span>
+                    </div>
+                    <div class="text-muted text-truncate" style="font-size: 0.75rem;" :title="getCompanyName(item.counterparty)">
+                        {{ getCompanyName(item.counterparty) || '—' }}
+                    </div>
+                    <div class="d-flex justify-content-between mt-1 text-muted" style="font-size: 0.65rem;">
+                        <span>{{ formatDate(item.date) }}</span>
+                        <span v-if="item.paidAmount > 0" class="text-secondary fw-bold">Опл: {{ formatMoneyShort(item.paidAmount) }}</span>
+                    </div>
+                </div>
+                <div v-if="month.items.length === 0" class="text-center text-muted mt-5 small opacity-25">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- COMPANY SELECTOR -->
+    <div class="modal fade" id="companyModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">Поиск компании</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-2">
+                    <input type="text" class="form-control mb-2" placeholder="Введите название..." v-model="companySearchQuery" @input="searchCompanies" ref="searchInput">
+                    <div class="text-center" v-if="isSearchingCompany"><div class="spinner-border spinner-border-sm text-primary"></div></div>
+                    <div class="company-list-container" v-else>
+                        <div v-for="comp in foundCompanies" :key="comp.ID" class="company-item" @click="selectCompany(comp)">{{ comp.TITLE }}</div>
+                        <div v-if="foundCompanies.length === 0" class="text-muted text-center mt-3 small">Ничего не найдено</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CREATE / EDIT MODAL -->
+    <div class="modal fade" id="detailModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2 bg-light">
+                    <h6 class="modal-title">{{ isCreating ? 'Новая запись (' + (editForm.type==='income'?'Доход':'Расход') + ')' : 'Редактирование' }}</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" v-if="editForm">
+                    <div v-if="!isEditing && !isCreating">
+                        <h2 class="text-center mb-1" :class="editForm.type === 'income' ? 'text-success' : 'text-danger'">{{ formatMoney(editForm.amount) }}</h2>
+                        <div class="text-center mb-4 small text-muted">Оплачено: <span class="fw-bold text-dark">{{ formatMoney(editForm.paidAmount) }}</span></div>
+                        <table class="table table-sm table-borderless small mb-0">
+                            <tr><td class="text-muted" width="35%">Дата:</td><td>{{ formatDate(editForm.date) }}</td></tr>
+                            <tr><td class="text-muted">{{ editForm.type === 'income' ? 'Дебитор' : 'Кредитор' }}:</td><td class="fw-bold">{{ getCompanyName(editForm.counterparty) }}</td></tr>
+                            <tr><td class="text-muted">Выгодополуч.:</td><td>{{ getCompanyName(editForm.beneficiary) }}</td></tr>
+                            <tr><td class="text-muted">Провайдер:</td><td>{{ getCompanyName(editForm.provider) }}</td></tr>
+                            <tr><td class="text-muted">Категория:</td><td>{{ getCategoryName(editForm.type, editForm.category) }}</td></tr>
+                            <tr><td class="text-muted">Привязка:</td><td class="font-monospace">{{ editForm.paymentLink || '—' }}</td></tr>
+                        </table>
+                    </div>
+                    <div v-else>
+                        <div class="row g-2">
+                            <div class="col-6"><label class="small text-muted">Сумма</label><input type="number" class="form-control" v-model="editForm.amount"></div>
+                            <div class="col-6"><label class="small text-muted">Дата</label><input type="date" class="form-control" v-model="editForm.date"></div>
+                            <div class="col-12">
+                                <label class="small text-muted">{{ editForm.type === 'income' ? 'Дебитор' : 'Кредитор' }}</label>
+                                <div class="input-group"><input type="text" class="form-control" :value="getCompanyName(editForm.counterparty)" readonly placeholder="Не выбрано"><button class="btn btn-outline-secondary" @click="openCompanySelector('counterparty')">Поиск</button><button class="btn btn-outline-danger" @click="editForm.counterparty = 0">✕</button></div>
+                            </div>
+                            <div class="col-12">
+                                <label class="small text-muted">Выгодополучатель</label>
+                                <div class="input-group"><input type="text" class="form-control" :value="getCompanyName(editForm.beneficiary)" readonly placeholder="Не выбрано"><button class="btn btn-outline-secondary" @click="openCompanySelector('beneficiary')">Поиск</button><button class="btn btn-outline-danger" @click="editForm.beneficiary = 0">✕</button></div>
+                            </div>
+                            <div class="col-12">
+                                <label class="small text-muted">Провайдер</label>
+                                <div class="input-group"><input type="text" class="form-control" :value="getCompanyName(editForm.provider)" readonly placeholder="Не выбрано"><button class="btn btn-outline-secondary" @click="openCompanySelector('provider')">Поиск</button><button class="btn btn-outline-danger" @click="editForm.provider = 0">✕</button></div>
+                            </div>
+                            <div class="col-12">
+                                <label class="small text-muted">Категория</label>
+                                <select class="form-select" v-model="editForm.category">
+                                    <option value="">Без категории</option>
+                                    <option v-for="opt in (editForm.type === 'income' ? listOptions.income : listOptions.expense)" :key="opt.ID" :value="opt.ID">{{ opt.NAME }}</option>
+                                </select>
+                            </div>
+                            <div class="col-12" v-if="!isCreating"><label class="small text-muted">История</label><textarea class="form-control font-monospace" rows="2" v-model="editForm.paymentHistory"></textarea></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <div class="w-100 d-flex justify-content-between">
+                        <div><button v-if="!isEditing && !isCreating" class="btn btn-outline-secondary" @click="openInBitrix(editForm)">CRM</button></div>
+                        <div>
+                            <button v-if="!isEditing && !isCreating" class="btn btn-primary" @click="enableEdit">Редактировать</button>
+                            <template v-else>
+                                <button class="btn btn-link text-decoration-none text-secondary me-2" @click="cancelEdit">Отмена</button>
+                                <button class="btn btn-success" @click="saveItem" :disabled="isSaving">Сохранить</button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BATCH CREATE MODAL -->
+    <div class="modal fade" id="batchModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header py-2 bg-light"><h6 class="modal-title">Массовое создание</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="btn-group w-100 mb-3">
+                        <input type="radio" class="btn-check" name="bt" id="btExp" value="expense" v-model="batchForm.type">
+                        <label class="btn btn-outline-danger" for="btExp">Расход</label>
+                        <input type="radio" class="btn-check" name="bt" id="btInc" value="income" v-model="batchForm.type">
+                        <label class="btn btn-outline-success" for="btInc">Доход</label>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6"><label class="small text-muted">Сумма</label><input type="number" class="form-control" v-model="batchForm.amount"></div>
+                        <div class="col-6"><label class="small text-muted">Название</label><input type="text" class="form-control" v-model="batchForm.title"></div>
+                        <div class="col-12">
+                            <div class="input-group input-group-sm"><span class="input-group-text" style="width:90px">{{ batchForm.type === 'income'?'Дебитор':'Кредитор' }}</span><input type="text" class="form-control" :value="getCompanyName(batchForm.counterparty)" readonly><button class="btn btn-outline-secondary" @click="openCompanySelector('counterparty', true)">Поиск</button></div>
+                        </div>
+                        <div class="col-12">
+                            <div class="input-group input-group-sm"><span class="input-group-text" style="width:90px">Выгодопол.</span><input type="text" class="form-control" :value="getCompanyName(batchForm.beneficiary)" readonly><button class="btn btn-outline-secondary" @click="openCompanySelector('beneficiary', true)">Поиск</button></div>
+                        </div>
+                        <div class="col-12">
+                            <div class="input-group input-group-sm"><span class="input-group-text" style="width:90px">Провайдер</span><input type="text" class="form-control" :value="getCompanyName(batchForm.provider)" readonly><button class="btn btn-outline-secondary" @click="openCompanySelector('provider', true)">Поиск</button></div>
+                        </div>
+                        <div class="col-12">
+                            <div class="input-group input-group-sm"><span class="input-group-text" style="width:90px">Категория</span><select class="form-select" v-model="batchForm.category"><option value="">Без категории</option><option v-for="opt in (batchForm.type === 'income' ? listOptions.income : listOptions.expense)" :key="opt.ID" :value="opt.ID">{{ opt.NAME }}</option></select></div>
+                        </div>
+                        <div class="col-12 mt-2"><hr class="my-1"></div>
+                        <div class="col-12"><label class="small text-muted">Периодичность</label><select class="form-select" v-model="batchForm.period"><option value="month">Раз в месяц</option><option value="week">Раз в неделю</option><option value="quarter">Раз в квартал</option><option value="custom">Вручную</option></select></div>
+                        <div class="col-12" v-if="batchForm.period !== 'custom'"><div class="input-group"><input type="date" class="form-control" v-model="batchForm.startDate"><input type="number" class="form-control" placeholder="Кол-во" style="max-width:80px" v-model="batchForm.repeatCount"><button class="btn btn-secondary" @click="generateDates">Gen</button></div></div>
+                        <div class="col-12" v-if="batchForm.period === 'custom'"><div class="input-group"><input type="date" class="form-control" v-model="batchForm.customDateInput"><button class="btn btn-outline-secondary" @click="addCustomDate">Add</button></div></div>
+                        <div class="col-12"><div class="border rounded p-2 bg-light d-flex flex-wrap gap-1" style="max-height:100px;overflow-y:auto"><span v-for="(d,i) in batchForm.dates" :key="i" class="badge bg-secondary cursor-pointer" @click="removeDate(i)">{{d}} &times;</span></div></div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button class="btn btn-primary w-100" @click="processBatchCreate" :disabled="isSaving || batchForm.dates.length===0">Создать</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const { createApp } = Vue;
+
+    const app = createApp({
+        data() {
+            return {
+                config: {
+                    income: {
+                        id: 1310,
+                        fields: {
+                            amount: 'opportunity', date: 'ufCrm20_1741452390', paymentLink: 'ufCrm94_1764188870', history: 'ufCrm94_1763844352',
+                            category: 'ufCrm94_1763935908', counterparty: 'ufCrm32_1741256907', beneficiary: 'ufCrm32_1741256841', provider: 'ufCrm32_1741256867'
+                        }
+                    },
+                    expense: {
+                        id: 1304,
+                        fields: {
+                            amount: 'opportunity', date: 'ufCrm20_1741452390', paymentLink: 'ufCrm92_1764188790', history: 'ufCrm92_1763983424', // Corrected
+                            category: 'ufCrm92_1763983487', counterparty: 'ufCrm20_1741426003', beneficiary: 'ufCrm20_1738569630', provider: 'ufCrm20_1738569678'
+                        }
+                    }
+                },
+                year: new Date().getFullYear(),
+                loading: true,
+                loadCounter: 0,
+                rawIncomes: [], rawExpenses: [],
+                companyCache: {},
+                listOptions: { income: [], expense: [] },
+                monthNames: ["ЯНВ", "ФЕВ", "МАР", "АПР", "МАЙ", "ИЮН", "ИЮЛ", "АВГ", "СЕН", "ОКТ", "НОЯ", "ДЕК"],
+                activeMobileMonth: new Date().getMonth(),
+                showFiltersMobile: false,
+                windowWidth: window.innerWidth,
+                filters: { search: '', type: 'all', status: 'all', sort: 'date' },
+                detailModal: null, batchModal: null, companyModal: null,
+                isEditing: false, isCreating: false, isSaving: false, editForm: null,
+                companySearchQuery: '', foundCompanies: [], isSearchingCompany: false, searchTimeout: null, selectorTarget: null, selectorField: null,
+                batchForm: { type: 'expense', amount: 0, title: '', period: 'month', startDate: new Date().toISOString().slice(0,10), repeatCount: 12, customDateInput: '', dates: [], counterparty: 0, beneficiary: 0, provider: 0, category: '' }
+            }
+        },
+        computed: {
+            isDesktop() { return this.windowWidth >= 992; },
+            filteredCount() { return this.months.reduce((acc, m) => acc + m.items.length, 0); },
+            months() {
+                let data = Array.from({length: 12}, () => ({ items: [], plan: 0, fact: 0 }));
+                const process = (items) => {
+                    items.forEach(item => {
+                        if (!item.date) return;
+                        const d = new Date(item.date);
+                        if (d.getFullYear() !== this.year) return;
+                        if (this.filters.search) {
+                            const searchLower = this.filters.search.toLowerCase();
+                            const cpName = this.getCompanyName(item.counterparty);
+                            const safeName = cpName ? String(cpName).toLowerCase() : '';
+                            if (!safeName.includes(searchLower)) return;
+                        }
+                        if (this.filters.type !== 'all' && item.type !== this.filters.type) return;
+                        if (this.filters.status !== 'all' && item.status !== this.filters.status) return;
+                        const m = d.getMonth();
+                        data[m].items.push({ ...item });
+                        if (item.type === 'income') { data[m].plan += item.amount; data[m].fact += item.paidAmount; } 
+                        else { data[m].plan -= item.amount; data[m].fact -= item.paidAmount; }
+                    });
+                };
+                process(this.normalizedIncomes); process(this.normalizedExpenses);
+                data.forEach(m => {
+                    m.items.sort((a, b) => {
+                        if (this.filters.sort === 'amount_desc') return b.amount - a.amount;
+                        else if (this.filters.sort === 'amount_asc') return a.amount - b.amount;
+                        else return new Date(a.date) - new Date(b.date);
+                    });
+                });
+                return data;
+            },
+            yearTotal() { return this.months.reduce((acc, m) => { acc.plan += m.plan; acc.fact += m.fact; return acc; }, { plan: 0, fact: 0 }); },
+            normalizedIncomes() { return this.removeDuplicates(this.rawIncomes).map(i => this.normalize(i, 'income')); },
+            normalizedExpenses() { return this.removeDuplicates(this.rawExpenses).map(i => this.normalize(i, 'expense')); }
+        },
+        mounted() {
+            this.detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
+            this.batchModal = new bootstrap.Modal(document.getElementById('batchModal'));
+            this.companyModal = new bootstrap.Modal(document.getElementById('companyModal'));
+            window.addEventListener('resize', () => { this.windowWidth = window.innerWidth; });
+            if(typeof BX24 !== 'undefined') { this.fetchData(); this.loadCategories(); }
+        },
+        methods: {
+            // === BATCH LOADER ===
+            batchFetch(entityId) {
+                return new Promise((resolve) => {
+                    const cmds = {};
+                    // 40 pages * 50 = 2000 items
+                    for(let i=0; i<40; i++) {
+                        cmds[i] = {
+                            method: 'crm.item.list',
+                            params: { entityTypeId: entityId, select: ['*', 'uf*'], order: { id: 'DESC' }, start: i * 50 }
+                        };
+                    }
+                    BX24.callBatch(cmds, (res) => {
+                        let all = [];
+                        for(let i in res) {
+                            if(res[i].error()) continue;
+                            const data = res[i].data();
+                            const chunk = (data && data.items) ? data.items : (Array.isArray(data) ? data : []);
+                            all = all.concat(chunk);
+                        }
+                        resolve(all);
+                    });
+                });
+            },
+
+            async fetchData() {
+                this.loading = true; this.loadCounter = 0;
+                try {
+                    const [incomes, expenses] = await Promise.all([
+                        this.batchFetch(this.config.income.id),
+                        this.batchFetch(this.config.expense.id)
+                    ]);
+                    this.rawIncomes = incomes; this.rawExpenses = expenses;
+                    this.loadedItemsCount = incomes.length + expenses.length;
+                    await this.enrichNames([...incomes, ...expenses]);
+                } catch (e) { alert("Ошибка загрузки (503)."); } finally { this.loading = false; }
+            },
+
+            // === FIX CREATION ===
+            prepareFields(form, conf, title) {
+                const f = {};
+                f['TITLE'] = title;
+                f[conf.amount] = parseFloat(form.amount) || 0;
+                f[conf.date] = form.date;
+                
+                // Strict check: only send field if it has a value
+                if(form.counterparty && form.counterparty > 0) f[conf.counterparty] = parseInt(form.counterparty);
+                if(form.beneficiary && form.beneficiary > 0)  f[conf.beneficiary] = parseInt(form.beneficiary);
+                if(form.provider && form.provider > 0)     f[conf.provider] = parseInt(form.provider);
+                if(form.category && form.category > 0)     f[conf.category] = parseInt(form.category);
+                
+                // History field is string
+                if(form.paymentHistory) f[conf.history] = form.paymentHistory;
+                
+                return f;
+            },
+
+            async saveItem() {
+                this.isSaving = true;
+                const item = this.editForm;
+                const conf = this.config[item.type].fields;
+                const title = item.type === 'income' ? 'Новое поступление' : 'Новый расход';
+                const f = this.prepareFields(item, conf, title);
+                try {
+                    if (this.isCreating) await this.callBx('crm.item.add', { entityTypeId: this.config[item.type].id, fields: f });
+                    else await this.callBx('crm.item.update', { entityTypeId: this.config[item.type].id, id: item.id, fields: f });
+                    this.detailModal.hide(); this.fetchData();
+                } catch(e) { alert("Ошибка сохранения: " + JSON.stringify(e)); } finally { this.isSaving = false; }
+            },
+
+            async processBatchCreate() {
+                this.isSaving = true;
+                const type = this.batchForm.type;
+                const eid = this.config[type].id;
+                const conf = this.config[type].fields;
+                const batchCalls = {};
+                const title = type === 'income' ? 'Доход' : 'Расход';
+                
+                this.batchForm.dates.forEach((d, i) => {
+                    const itemData = { ...this.batchForm, date: d };
+                    const f = this.prepareFields(itemData, conf, title);
+                    batchCalls['cmd'+i] = { method: 'crm.item.add', params: { entityTypeId: eid, fields: f } };
+                });
+                
+                // BATCH EXECUTION + ERROR CHECK
+                BX24.callBatch(batchCalls, (res) => {
+                    let hasError = false;
+                    let errText = "";
+                    for(let i in res) {
+                        if(res[i].error()) {
+                            hasError = true;
+                            errText = res[i].error().error_description || "Неизвестная ошибка";
+                            break;
+                        }
+                    }
+                    this.isSaving = false;
+                    if(hasError) {
+                        alert("Ошибка при создании: " + errText);
+                    } else {
+                        this.batchModal.hide();
+                        this.fetchData();
+                    }
+                });
+            },
+
+            // ... (Helper methods)
+            openCompanySelector(field, isBatch = false) {
+                this.selectorField = field; this.selectorTarget = isBatch ? this.batchForm : this.editForm;
+                this.companySearchQuery = ''; this.foundCompanies = []; this.loadRecentCompanies(); this.companyModal.show();
+                setTimeout(() => { if(this.$refs.searchInput) this.$refs.searchInput.focus(); }, 500);
+            },
+            searchCompanies() {
+                if(this.searchTimeout) clearTimeout(this.searchTimeout);
+                if(this.companySearchQuery.length < 2) { this.foundCompanies = []; return; }
+                this.isSearchingCompany = true;
+                this.searchTimeout = setTimeout(async () => {
+                    try { const res = await this.callBx('crm.company.list', { filter: { '%TITLE': this.companySearchQuery }, select: ['ID', 'TITLE'], start: 0 }); this.foundCompanies = res.data(); } 
+                    catch(e) { console.error(e); } finally { this.isSearchingCompany = false; }
+                }, 400);
+            },
+            async loadRecentCompanies() { try { const res = await this.callBx('crm.company.list', { order: {ID:'DESC'}, select: ['ID','TITLE'], start: 0, limit: 20 }); this.foundCompanies = res.data(); } catch(e){} },
+            selectCompany(comp) { if(this.selectorTarget && this.selectorField) { this.selectorTarget[this.selectorField] = comp.ID; this.companyCache[comp.ID] = comp.TITLE; } this.companyModal.hide(); },
+            getCompanyName(id) { if(!id) return ''; return this.companyCache[id] || 'ID: ' + id; },
+            removeDuplicates(arr) { const s=new Set(); return arr.filter(i=>{const d=s.has(i.id);s.add(i.id);return !d;}); },
+            changeActiveMonth(d) { let n=this.activeMobileMonth+d; if(n<0)n=11; if(n>11)n=0; this.activeMobileMonth=n; },
+            callBx(m, p) { return new Promise((res, rej) => { BX24.callMethod(m, p, r => r.error() ? rej(r.error()) : res(r)); }); },
+            extractId(v) { if(!v)return 0; if(Array.isArray(v))v=v[0]; return String(v).replace(/[^0-9]/g, ''); },
+            
+            async loadCategories() {
+                try {
+                    const resExp = await this.callBx('lists.element.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: 102 });
+                    this.listOptions.expense = resExp.data().map(el => ({ ID: el.ID, NAME: el.NAME }));
+                    const resInc = await this.callBx('lists.element.get', { IBLOCK_TYPE_ID: 'lists', IBLOCK_ID: 108 });
+                    this.listOptions.income = resInc.data().map(el => ({ ID: el.ID, NAME: el.NAME }));
+                } catch(e){}
+            },
+            getCategoryName(type, id) {
+                if(!id) return '—';
+                const opts = type === 'income' ? this.listOptions.income : this.listOptions.expense;
+                const found = opts.find(o => o.ID == id);
+                return found ? found.NAME : id;
+            },
+            async enrichNames(items) {
+                const ids = new Set();
+                items.forEach(item => {
+                    [this.config.income.fields.counterparty, this.config.income.fields.beneficiary, this.config.income.fields.provider,
+                     this.config.expense.fields.counterparty, this.config.expense.fields.beneficiary, this.config.expense.fields.provider].forEach(f => {
+                         const cleanId = this.extractId(item[f]); if (cleanId > 0) ids.add(cleanId);
+                    });
+                });
+                if(ids.size > 0) {
+                    const arr = Array.from(ids);
+                    for(let i=0; i<arr.length; i+=50) {
+                        try { const res = await this.callBx('crm.company.list', { filter: { ID: arr.slice(i, i+50) }, select: ['ID', 'TITLE'] }); res.data().forEach(c => this.companyCache[c.ID] = c.TITLE); } catch(e){}
+                    }
+                }
+            },
+            normalize(raw, type) {
+                const conf = this.config[type].fields;
+                const getVal = (f) => { const v = raw[f]; return Array.isArray(v) ? v[0] : v; };
+                const amount = parseFloat(raw[conf.amount]) || 0;
+                const linkVal = getVal(conf.paymentLink);
+                const history = raw[conf.history];
+                let paidAmount = 0; let status = 'unpaid'; let statusText = 'Не оплачено';
+                if (linkVal) {
+                    if (history && typeof history === 'string') {
+                        const parts = history.split('/');
+                        for(let i=0; i<parts.length; i+=2) paidAmount += (parseFloat(parts[i]) || 0);
+                    }
+                    if (Math.abs(paidAmount - amount) < 0.1) { status = 'paid'; statusText = 'Проведен'; }
+                    else if (paidAmount > 0) { status = 'partial'; statusText = 'Частично'; }
+                    else { status = 'unpaid'; statusText = 'Ожидает оплаты'; }
+                }
+                return {
+                    id: raw.id, uKey: type + '_' + raw.id, type, amount, paidAmount,
+                    date: getVal(conf.date) ? getVal(conf.date).split('T')[0] : null,
+                    paymentLink: linkVal,
+                    category: getVal(conf.category),
+                    counterparty: this.extractId(getVal(conf.counterparty)),
+                    beneficiary: this.extractId(getVal(conf.beneficiary)),
+                    provider: this.extractId(getVal(conf.provider)),
+                    paymentHistory: history,
+                    status, statusText, raw
+                };
+            },
+            formatMoney(v) { return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(v); },
+            formatMoneyShort(v) { return new Intl.NumberFormat('ru-RU', { notation: "compact", maximumFractionDigits: 1 }).format(v); },
+            formatDate(d) { return d ? d.split('-').reverse().join('.') : ''; },
+            changeYear(d) { this.year += d; this.fetchData(); },
+            
+            showDetails(item) { this.isEditing = false; this.isCreating = false; this.editForm = { ...item }; this.detailModal.show(); },
+            openCreateModal(type) {
+                this.isCreating = true; this.isEditing = true;
+                this.editForm = { type: type, amount: 0, date: new Date().toISOString().slice(0,10), counterparty: 0, beneficiary: 0, provider: 0, category: '', paymentHistory: '' };
+                this.detailModal.show();
+            },
+            enableEdit() { this.isEditing = true; },
+            cancelEdit() { this.isEditing = false; this.detailModal.hide(); },
+            openInBitrix(item) { BX24.openPath(`/crm/type/${this.config[item.type].id}/details/${item.id}/`); },
+            openBatchModal() { this.batchForm.dates = []; this.batchModal.show(); },
+            openSingleModal(type) { this.openCreateModal(type); },
+            addCustomDate() { if(this.batchForm.customDateInput) this.batchForm.dates.push(this.batchForm.customDateInput); },
+            removeDate(i) { this.batchForm.dates.splice(i,1); },
+            generateDates() {
+                const arr = []; let d = new Date(this.batchForm.startDate);
+                for(let i=0; i<this.batchForm.repeatCount; i++) {
+                    arr.push(d.toISOString().slice(0,10));
+                    if(this.batchForm.period==='week') d.setDate(d.getDate()+7);
+                    else if(this.batchForm.period==='month') d.setMonth(d.getMonth()+1);
+                    else if(this.batchForm.period==='quarter') d.setMonth(d.getMonth()+3);
+                    else if(this.batchForm.period==='year') d.setFullYear(d.getFullYear()+1);
+                }
+                this.batchForm.dates = arr;
+            }
+        }
+    });
+
+    BX24.init(function() { app.mount('#app'); });
+</script>
+</body>
+</html>

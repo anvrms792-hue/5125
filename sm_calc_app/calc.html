@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Автосмета</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
+    <style>
+        /* DASHBOARD LAYOUT */
+        body, html { height: 100%; margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; }
+        .app-container { display: flex; height: 100vh; width: 100vw; }
+        
+        .sidebar { width: 400px; min-width: 350px; background: #ffffff; border-right: 1px solid #dee2e6; display: flex; flex-direction: column; z-index: 10; box-shadow: 2px 0 10px rgba(0,0,0,0.05); }
+        .sidebar-header { padding: 15px 20px; background: #0d6efd; color: white; flex-shrink: 0; }
+        .sidebar-content { flex-grow: 1; overflow-y: auto; padding: 20px; }
+        .sidebar-footer { padding: 15px 20px; background: #f8f9fa; border-top: 1px solid #dee2e6; flex-shrink: 0; }
+        
+        .preview-pane { flex-grow: 1; background-color: #525659; overflow: auto; padding: 40px; display: flex; justify-content: center; align-items: flex-start; }
+        .print-area { background: white; padding: 40px; box-shadow: 0 0 20px rgba(0,0,0,0.5); width: 1100px; min-width: 1100px; min-height: 800px; }
+        
+        .form-label { font-size: 0.85rem; font-weight: 600; color: #495057; margin-bottom: 0.3rem; }
+        .form-control-sm { font-size: 0.9rem; }
+        .group-box { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 12px; margin-bottom: 15px; }
+        .group-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: #adb5bd; margin-bottom: 10px; font-weight: 700; }
+        
+        .smeta-header { text-align: center; font-weight: bold; margin-bottom: 20px; }
+        table { font-size: 11px; width: 100%; border-collapse: collapse; margin-bottom: 15px; table-layout: fixed; }
+        th, td { border: 1px solid #000; padding: 4px; text-align: center; vertical-align: middle; word-wrap: break-word; }
+        th { background-color: #f2f2f2; font-weight: 700; font-size: 10px; }
+        
+        #staffTable th:nth-child(1) { width: 5%; }
+        #staffTable th:nth-child(2) { width: 25%; }
+        #staffTable th:nth-child(n+3) { width: 11%; }
+        #staffTable th:last-child { width: 16%; }
+        
+        .text-left { text-align: left !important; }
+        .text-right { text-align: right !important; }
+
+        @media (max-width: 992px) {
+            .app-container { flex-direction: column; overflow: auto; }
+            .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #dee2e6; }
+            .preview-pane { height: auto; padding: 20px; }
+            .print-area { transform: scale(0.6); transform-origin: top left; margin-bottom: -40%; width: 150%; }
+            body, html { overflow: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="sidebar no-print">
+        <div class="sidebar-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-calculator"></i> Автосмета </h5>
+        </div>
+        
+        <div class="sidebar-content">
+            <form id="calcForm">
+                <div class="group-box">
+                    <div class="group-title">1. Объект и Бюджет</div>
+                    <div class="mb-2">
+                        <label class="form-label">Наименование объекта</label>
+                        <textarea class="form-control form-control-sm" id="objectName" rows="3">«Строительство линии скоростного подземно-наземного легкорельсового транспорта в г. Красноярске. Первый этап.»</textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Вид работ</label>
+                        <input type="text" class="form-control form-control-sm" id="workType" value="Разработка Специальных технических условий (СТУ ПБ)">
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-8">
+                            <label class="form-label text-primary">Целевая сумма (Net)</label>
+                            <input type="number" class="form-control fw-bold border-primary" id="targetSum" value="1500000" step="0.01">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">№ Сметы</label>
+                            <input type="text" class="form-control" id="smetaNum" value="1">
+                        </div>
+                    </div>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" id="inputIsWithVat" checked onchange="calculateAndRender()">
+                        <label class="form-check-label small" for="inputIsWithVat">Входит НДС (20%)</label>
+                    </div>
+                </div>
+
+                <div class="group-box">
+                    <div class="group-title">2. База расчета</div>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label">Год</label>
+                            <select class="form-select form-select-sm" id="yearSelect" onchange="updateSalaryByYear()">
+                                <option value="2023">2023</option>
+                                <option value="2024" selected>2024</option>
+                                <option value="2025">2025</option>
+                            </select>
+                        </div>
+                        <div class="col-8">
+                            <label class="form-label">Среднемес. ЗП</label>
+                            <input type="number" class="form-control form-control-sm" id="baseSalaryInput" step="0.01" onchange="calculateAndRender()">
+                        </div>
+                    </div>
+                    <div class="text-end mt-1">
+                        <small class="text-muted">Выработка: <span class="text-success fw-bold" id="displayUnitRate">-</span></small>
+                    </div>
+                </div>
+
+                <div class="group-box">
+                    <div class="group-title">3. Подгонка</div>
+                    <div class="row align-items-center mb-2">
+                        <div class="col-4"><label class="form-label mb-0">Срок (дни):</label></div>
+                        <div class="col-5">
+                            <input type="number" class="form-control form-control-sm" id="manualDuration" placeholder="Авто" onchange="calculateAndRender()">
+                        </div>
+                        <div class="col-3 text-muted small"><span id="durationHint"></span></div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="mb-2">
+                        <label class="form-label">Договорной коэфф. (K):</label>
+                        <div class="input-group input-group-sm mb-2">
+                            <span class="input-group-text bg-white">Фикс:</span>
+                            <input type="number" class="form-control" id="manualCoeff" step="0.01" placeholder="Авто" onchange="calculateAndRender()">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <select class="form-select form-select-sm" id="coeffPrecision" onchange="calculateAndRender()">
+                                <option value="exact">Округл кдог: Точно</option>
+                                <option value="2" selected>Округл кдог: 2 знака</option>
+                                <option value="3">Округл кдог: 3 знака</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <select class="form-select form-select-sm" id="deviationMode" onchange="calculateAndRender()">
+                                <option value="nearest">Откл.: Ближ.</option>
+                                <option value="lower">Откл.: Меньше</option>
+                                <option value="higher">Откл.: Больше</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="applyCoeffMath" checked onchange="calculateAndRender()">
+                            <label class="form-check-label small" for="applyCoeffMath">Учтен в целевой цене</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="showCoeffRow" checked onchange="calculateAndRender()">
+                            <label class="form-check-label small" for="showCoeffRow">Показать Kдог</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="outputShowVat" checked onchange="calculateAndRender()">
+                    <label class="form-check-label small" for="outputShowVat">Показать строки НДС</label>
+                </div>
+            </form>
+        </div>
+
+        <div class="sidebar-footer">
+            <div id="calcInfoPanel" class="mb-2 text-center" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="small text-muted">Итого:</span>
+                    <span id="infoCalcSum" class="fw-bold text-dark"></span>
+                </div>
+                <div id="infoDiff" class="small text-end"></div>
+            </div>
+
+            <button type="button" class="btn btn-primary w-100 fw-bold mb-2" onclick="calculateAndRender()">
+                <i class="bi bi-arrow-clockwise"></i> Пересчитать
+            </button>
+            <div class="btn-group w-100">
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="downloadVectorPDF()"><i class="bi bi-file-pdf"></i> PDF</button>
+                <button type="button" class="btn btn-outline-success btn-sm" onclick="downloadStyledExcel()"><i class="bi bi-file-excel"></i> Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="preview-pane">
+        <div class="print-area" id="printContent">
+            
+            <div class="smeta-header">
+                Смета №<span id="outSmetaNum">1</span><br>
+                <span id="outWorkType">...</span><br>
+                <span id="outObjectName" style="font-weight: normal;">...</span>
+            </div>
+
+            <div class="text-center mb-2" style="font-size: 12px; font-weight: bold;">
+                Расчет коэффициента, учитывающего степень участия исполнителей-проектировщиков различной квалификации в выполнении проектных работ
+            </div>
+
+            <table id="staffTable">
+                <thead></thead>
+                <tbody id="staffTableBody"></tbody>
+            </table>
+
+            <div class="text-center mt-4 mb-2" style="font-size: 12px; font-weight: bold;">
+                Расчет стоимости проектных работ в соответствии с калькуляцией затрат на проектирование
+            </div>
+
+            <table id="costTable">
+                <thead>
+                    <tr>
+                        <th>№ п.п.</th>
+                        <th id="thYearCode">Среднемесячная зарплата исполнителей, руб. код 71.12, 2024 г</th>
+                        <th>Количество рабочих дней в месяце (дни)</th>
+                        <th>Среднедневная зарплата исполнителей (гр2/гр3) (руб.)</th>
+                        <th>Удельный вес заработной платы в себестоимости работ, Кз (%)</th>
+                        <th>Рентабельность, Р, (%)</th>
+                        <th>Среднедневная единичная выработка (гр4*(1+гр6))/гр5) (руб.)</th>
+                        <th>Продолжительность разработки, Тпл (дни)</th>
+                        <th>Численность исполнителей, Чпл (чел.)</th>
+                        <th>Коэффициент квалификации (участия), Куч(кв)</th>
+                        <th>Стоимость работ,С= (гр7хгр8хгр9хгр10) (руб.)</th>
+                    </tr>
+                    <tr>
+                        <th>1</th>
+                        <th>2</th>
+                        <th>3</th>
+                        <th>4</th>
+                        <th>5</th>
+                        <th>6</th>
+                        <th>7</th>
+                        <th>8</th>
+                        <th>9</th>
+                        <th>10</th>
+                        <th>11</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td id="cellMonthlySalary"></td>
+                        <td>21</td>
+                        <td id="cellDailySalary"></td>
+                        <td>40,06</td>
+                        <td>10</td>
+                        <td id="cellUnitRate"></td>
+                        <td id="cellDuration"></td>
+                        <td id="cellPeopleCount"></td>
+                        <td id="cellKqvAvg"></td>
+                        <td id="cellBaseCost"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="mt-4" style="font-size: 12px; line-height: 1.6;">
+                <div class="row" id="rowContractCoeff">
+                    <div class="col-8">Договорной коэффициент:</div>
+                    <div class="col-4 text-right">
+                         <span id="contractCoeffVal">0,75</span> 
+                         <span id="coeffFormulaPart">от <span id="baseCostRepeat"></span> руб. = <b><span id="costBaseTotal"></span></b></span>
+                    </div>
+                </div>
+                
+                <div id="vatBlock">
+                    <div class="row">
+                        <div class="col-8">НДС 20%:</div>
+                        <div class="col-4 text-right"><span id="vatVal"></span></div>
+                    </div>
+                    <div class="row fw-bold" style="font-size: 14px; border-top: 1px solid #ccc; margin-top: 5px; padding-top: 5px;">
+                        <div class="col-8">Всего с НДС (руб.):</div>
+                        <div class="col-4 text-right"><span id="totalSumVal"></span></div>
+                    </div>
+                </div>
+                
+                <div id="simpleTotalBlock" style="display:none;">
+                     <div class="row fw-bold" style="font-size: 14px; border-top: 1px solid #ccc; margin-top: 5px; padding-top: 5px;">
+                        <div class="col-8">Итоговая стоимость работ:</div>
+                        <div class="col-4 text-right"><span id="simpleTotalVal"></span></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    let G_TEAM = [];
+    let G_CALC_DATA = {}; 
+
+    const SALARY_DB = { 2023: 108375.27, 2024: 121380.30, 2025: 135946.00 };
+    const WORK_DAYS = 21;
+    const KZ_PERCENT = 40.06;
+    const PROFIT_PERCENT = 10;
+    let CURRENT_UNIT_RATE = 15871; 
+
+    // Tier 3 = Bosses, Tier 2 = Heads, Tier 1 = Leads, Tier 0 = Engineers
+    const ROLES_DB = [
+        { id: 'kgip', name: 'КГИП', index: 2.00, tier: 3, limit: 1 }, 
+        { id: 'dept_head', name: 'Начальник отдела', index: 2.25, tier: 3 },
+        { id: 'chief_eng', name: 'Главный инженер проекта', index: 1.60, tier: 3 },
+        { id: 'chief_spec', name: 'Главный специалист', index: 1.32, tier: 2 },
+        { id: 'group_head', name: 'Руководитель группы', index: 1.30, tier: 2 },
+        { id: 'lead_spec', name: 'Ведущий специалист', index: 1.00, tier: 1 },
+        { id: 'eng_1', name: 'Инженер 1 категории', index: 0.90, tier: 0 } 
+    ];
+
+    function formatNum(num, decimals = 2) {
+        return num.toLocaleString('ru-RU', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    }
+
+    function updateSalaryByYear() {
+        const year = document.getElementById('yearSelect').value;
+        if (SALARY_DB[year]) document.getElementById('baseSalaryInput').value = SALARY_DB[year];
+        calculateAndRender();
+    }
+
+    function calculateAndRender() {
+        const salaryMonth = parseFloat(document.getElementById('baseSalaryInput').value) || 0;
+        const salaryDay = Math.round(salaryMonth / WORK_DAYS);
+        CURRENT_UNIT_RATE = Math.round( (salaryDay * (1 + PROFIT_PERCENT/100)) / (KZ_PERCENT/100) );
+        document.getElementById('displayUnitRate').innerText = formatNum(CURRENT_UNIT_RATE, 0);
+
+        const inputSum = parseFloat(document.getElementById('targetSum').value) || 0;
+        const isInputWithVat = document.getElementById('inputIsWithVat').checked;
+        const showOutputVat = document.getElementById('outputShowVat').checked;
+        const manualDuration = parseInt(document.getElementById('manualDuration').value) || 0;
+        const manualCoeff = parseFloat(document.getElementById('manualCoeff').value) || 0;
+        const coeffPrecision = document.getElementById('coeffPrecision').value; 
+        const deviationMode = document.getElementById('deviationMode').value; 
+        const applyCoeff = document.getElementById('applyCoeffMath').checked;
+        const showCoeff = document.getElementById('showCoeffRow').checked;
+        const selectedYear = document.getElementById('yearSelect').value;
+
+        document.getElementById('thYearCode').innerText = `Среднемесячная зарплата исполнителей, руб. код 71.12, ${selectedYear} г`;
+        document.getElementById('deviationMode').disabled = (coeffPrecision === 'exact');
+        document.getElementById('manualDuration').placeholder = manualDuration > 0 ? "" : "Авто";
+
+        let targetSumNoVat = isInputWithVat ? (inputSum / 1.20) : inputSum;
+        let strategyValue = (isInputWithVat ? inputSum : inputSum * 1.2);
+        
+        let allowedRoles = ROLES_DB;
+        let forceCheapest = false;
+        
+        if (strategyValue < 800000) {
+            allowedRoles = ROLES_DB.filter(r => r.tier <= 1).sort((a,b)=>a.index-b.index);
+            forceCheapest = true;
+        } else if (strategyValue < 2000000) {
+            allowedRoles = ROLES_DB.filter(r => r.tier <= 2);
+        }
+
+        // --- 1. SET AIM TARGET (Base Cost) ---
+        // If Manual K exists, we ALWAYS aim for (Target / K) to accommodate the cut.
+        // If Auto K, we aim for Target.
+        let kFactorForAim = (manualCoeff > 0) ? manualCoeff : 1.0;
+        let aimTarget = targetSumNoVat / kFactorForAim;
+
+        // --- 2. SET DURATION ---
+        let duration = manualDuration;
+        if (duration === 0) {
+            let estimatedAvgIndex = forceCheapest ? 0.95 : 1.25;
+            let totalManDays = aimTarget / (CURRENT_UNIT_RATE * estimatedAvgIndex);
+            let targetTeamSize = forceCheapest ? 2 : 5;
+            duration = Math.ceil(totalManDays / targetTeamSize);
+            if (duration < 5) duration = 5; if (duration > 150) duration = 150;
+            document.getElementById('durationHint').innerText = "(авто)";
+        } else {
+            document.getElementById('durationHint').innerText = "";
+        }
+
+        // --- 3. FILL WORKERS ---
+        let team = [];
+        let allowedWorkers = ROLES_DB.filter(r => r.tier <= 1); 
+        if (forceCheapest) allowedWorkers.sort((a,b)=>a.index-b.index);
+
+        const addRole = (roleId, count, days) => {
+            let role = ROLES_DB.find(r => r.id === roleId);
+            let existing = team.find(r => r.id === roleId);
+            if (existing) { existing.count += count; existing.days = Math.max(existing.days, days); }
+            else { team.push({ ...role, count: count, days: days }); }
+        };
+
+        if (strategyValue >= 2000000) addRole('kgip', 1, Math.min(25, duration));
+        
+        const calcBaseCost = (dur, currentTeam) => {
+            let sum = 0;
+            currentTeam.forEach(p => {
+                let d = p.days > dur ? dur : p.days;
+                sum += (d / dur) * p.count * p.index;
+            });
+            return CURRENT_UNIT_RATE * dur * sum;
+        };
+
+        let safety = 0;
+        while (calcBaseCost(duration, team) < aimTarget && safety < 500) {
+            let roleToAdd = forceCheapest ? (team.length === 0 ? allowedWorkers[0] : allowedWorkers[Math.floor(Math.random()*Math.min(allowedWorkers.length,2))]) : allowedWorkers[Math.floor(Math.random()*allowedWorkers.length)];
+            if (!roleToAdd) roleToAdd = allowedWorkers[0];
+            addRole(roleToAdd.id, 1, duration);
+            safety++;
+        }
+
+        // --- 4. ADD BOSSES ---
+        let totalSpecs = team.filter(r => r.tier <= 1).reduce((acc, t) => acc + t.count, 0);
+        let deptHeads = Math.floor(totalSpecs / 5);
+        let remainder = totalSpecs % 5;
+        let groupHeads = 0;
+
+        if (remainder === 4) deptHeads++; 
+        else if (remainder >= 2) groupHeads++;
+
+        if (deptHeads > 0) addRole('dept_head', deptHeads, Math.min(25, duration));
+        if (groupHeads > 0) addRole('group_head', groupHeads, Math.min(25, duration));
+
+        team.sort((a, b) => b.index - a.index);
+
+        // --- 5. FINE TUNING ---
+        safety = 0;
+        while (calcBaseCost(duration, team) > aimTarget && safety < 2000) {
+            let minAllowed = Math.max(1, Math.ceil(duration * 0.25));
+            let candidates = team.filter(p => p.days > minAllowed);
+            if (candidates.length === 0) break;
+            
+            candidates.sort((a, b) => b.index - a.index); // Cut expensive
+            let topCand = candidates[0];
+            
+            // GUARD: Check if removing day makes Base < AimTarget (which we don't want if K is fixed)
+            // If Auto K, we can drop below Target (K will just be 1.0)
+            // But here AimTarget IS Target (if Auto K).
+            // So rule: Don't drop below aimTarget significantly unless deviation mode allows
+            
+            let currentCost = calcBaseCost(duration, team);
+            // Simulate cut
+            topCand.days -= 1;
+            let nextCost = calcBaseCost(duration, team);
+            topCand.days += 1; // revert
+
+            if (nextCost < aimTarget) {
+                if (deviationMode === 'higher') break; // Must stay above
+                if (deviationMode === 'nearest') {
+                    if (Math.abs(currentCost - aimTarget) < Math.abs(nextCost - aimTarget)) break;
+                }
+                // 'lower' continues
+            }
+            
+            topCand.days -= 1;
+            safety++;
+        }
+
+        // --- 6. SYNC TP ---
+        let maxActualDays = 0;
+        team.forEach(p => { if(p.days > maxActualDays) maxActualDays = p.days; });
+        duration = maxActualDays;
+        
+        G_TEAM = team; 
+
+        // --- 7. FINAL CALCS & DIFF FIX ---
+        let finalBaseCost = calcBaseCost(duration, team);
+        let calculatedK = 1.0;
+        
+        if (manualCoeff > 0) { 
+            calculatedK = manualCoeff; 
+        } else {
+            calculatedK = targetSumNoVat / finalBaseCost;
+            if (coeffPrecision !== 'exact') {
+                let decimals = parseInt(coeffPrecision);
+                let factor = Math.pow(10, decimals);
+                if (deviationMode === 'nearest') calculatedK = Math.round(calculatedK * factor) / factor;
+                else if (deviationMode === 'lower') calculatedK = Math.floor(calculatedK * factor) / factor;
+                else if (deviationMode === 'higher') calculatedK = Math.ceil(calculatedK * factor) / factor;
+            }
+            if (calculatedK > 1.0) calculatedK = 1.0;
+        }
+        
+        // DISPLAY LOGIC
+        let calcSumNoVat = applyCoeff ? (finalBaseCost * calculatedK) : finalBaseCost;
+        let calcVat = calcSumNoVat * 0.20;
+        let calcTotalWithVat = calcSumNoVat + calcVat;
+
+        G_CALC_DATA = {
+            monthlySalary: salaryMonth, dailySalary: salaryDay, unitRate: CURRENT_UNIT_RATE,
+            duration: duration, people: team.reduce((acc,p)=>acc+p.count,0),
+            avgKqv: team.reduce((acc,p)=>acc+((p.days>duration?duration:p.days)/duration)*p.count*p.index,0) / team.reduce((acc,p)=>acc+p.count,0),
+            baseCost: finalBaseCost, k: calculatedK, applyK: applyCoeff,
+            costNoVat: calcSumNoVat, vat: calcVat, totalWithVat: calcTotalWithVat,
+            showVat: showOutputVat, showCoeff: showCoeff
+        };
+
+        // Render HTML
+        document.getElementById('outSmetaNum').innerText = document.getElementById('smetaNum').value;
+        document.getElementById('outWorkType').innerText = document.getElementById('workType').value;
+        document.getElementById('outObjectName').innerText = "Объект: " + document.getElementById('objectName').value;
+
+        const thead1 = document.querySelector('#staffTable thead');
+        thead1.innerHTML = `<tr><th>№ п.п.</th><th>Наименование должностей исполнителей</th><th>Фактическое время участия исполнителя в работе, Тф, (дни)</th><th>Плановая продолжительность выполнения работы, Тп, (дни)</th><th>Численность исполнителей одной квалификации, Чi, (чел.)</th><th>Индекс уровня зарплаты специалистов - исполнителей работы</th><th>Коэффициент квалификации (участия) специалистов Ккв(уч), сумма((гр3/ итог гр4)хгр5хгр6)/сумма гр5</th></tr><tr><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr>`;
+
+        const tbody = document.getElementById('staffTableBody');
+        tbody.innerHTML = '';
+        let displayIndex = 1;
+        team.forEach(person => {
+            let actualDays = person.days; 
+            let contrib = (actualDays / duration) * person.count * person.index;
+            tbody.innerHTML += `<tr><td>${displayIndex++}</td><td class="text-left">${person.name}</td><td>${actualDays}</td><td>${duration}</td><td>${person.count}</td><td>${formatNum(person.index)}</td><td>${formatNum(contrib, 3)}</td></tr>`;
+        });
+        tbody.innerHTML += `<tr style="font-weight:bold; background:#f9f9f9;"><td>${displayIndex}</td><td class="text-left">Итого:</td><td>-</td><td>${duration}</td><td>${G_CALC_DATA.people}</td><td>-</td><td>${formatNum(G_CALC_DATA.avgKqv, 3)}</td></tr>`;
+
+        document.getElementById('cellMonthlySalary').innerText = formatNum(salaryMonth);
+        document.getElementById('cellDailySalary').innerText = formatNum(salaryDay, 0);
+        document.getElementById('cellUnitRate').innerText = formatNum(CURRENT_UNIT_RATE, 0);
+        document.getElementById('cellDuration').innerText = duration;
+        document.getElementById('cellPeopleCount').innerText = G_CALC_DATA.people;
+        document.getElementById('cellKqvAvg').innerText = formatNum(G_CALC_DATA.avgKqv, 3);
+        document.getElementById('cellBaseCost').innerText = formatNum(finalBaseCost);
+
+        const rowCoeff = document.getElementById('rowContractCoeff');
+        if (showCoeff) {
+            rowCoeff.style.display = 'flex';
+            let decimalsK = (coeffPrecision === 'exact') ? 9 : parseInt(coeffPrecision);
+            document.getElementById('contractCoeffVal').innerText = calculatedK.toFixed(decimalsK);
+            if (applyCoeff) {
+                document.getElementById('coeffFormulaPart').style.display = 'inline';
+                document.getElementById('baseCostRepeat').innerText = formatNum(finalBaseCost);
+                document.getElementById('costBaseTotal').innerText = formatNum(calcSumNoVat);
+            } else {
+                document.getElementById('coeffFormulaPart').style.display = 'none';
+            }
+        } else {
+            rowCoeff.style.display = 'none';
+        }
+
+        if (showOutputVat) {
+            document.getElementById('vatBlock').style.display = 'block';
+            document.getElementById('simpleTotalBlock').style.display = 'none';
+            document.getElementById('vatVal').innerText = formatNum(calcVat);
+            document.getElementById('totalSumVal').innerText = formatNum(calcTotalWithVat);
+        } else {
+            document.getElementById('vatBlock').style.display = 'none';
+            document.getElementById('simpleTotalBlock').style.display = 'block';
+            document.getElementById('simpleTotalVal').innerText = formatNum(calcTotalWithVat);
+        }
+
+        // --- DIFF CALCULATION FIX ---
+        let infoPanel = document.getElementById('calcInfoPanel');
+        infoPanel.style.display = 'block';
+        let resultSumForUser = calcTotalWithVat; 
+        document.getElementById('infoCalcSum').innerText = formatNum(resultSumForUser) + " ₽";
+        
+        let compareTarget = isInputWithVat ? inputSum : inputSum * 1.2;
+        
+        // FIX: If we are showing Base Cost (applyCoeff=false), we must apply K before comparing
+        // because the base is intentionally inflated.
+        let compareValue = resultSumForUser;
+        if (!applyCoeff && manualCoeff > 0) {
+            compareValue = resultSumForUser * manualCoeff;
+        }
+
+        let diff = compareValue - compareTarget;
+        let diffPercent = (Math.abs(diff) / compareTarget) * 100;
+        let diffEl = document.getElementById('infoDiff');
+        
+        if (Math.abs(diff) < 2) {
+             diffEl.innerHTML = '<span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> Точное совпадение</span>';
+        } else {
+             let colorClass = (diff < 0) ? "text-danger" : "text-success";
+             let sign = diff > 0 ? "+" : "";
+             diffEl.innerHTML = `<span class="${colorClass} fw-bold">${sign}${formatNum(diff)} (${diffPercent.toFixed(2)}%)</span>`;
+        }
+    }
+
+    // --- PDF Export ---
+    function downloadVectorPDF() {
+        const year = document.getElementById('yearSelect').value;
+        const header1Text = "Расчет коэффициента, учитывающего степень участия исполнителей-проектировщиков различной квалификации в выполнении проектных работ";
+        const header2Text = "Расчет стоимости проектных работ в соответствии с калькуляцией затрат на проектирование";
+        
+        const t1Cols = [
+            '№ п.п.', 'Наименование должностей исполнителей', 
+            'Фактическое время участия исполнителя в работе, Тф, (дни)',
+            'Плановая продолжительность выполнения работы, Тп, (дни)',
+            'Численность исполнителей одной квалификации, Чi, (чел.)',
+            'Индекс уровня зарплаты специалистов - исполнителей работы',
+            'Коэффициент квалификации (участия) специалистов Ккв(уч), сумма((гр3/ итог гр4)хгр5хгр6)/сумма гр5'
+        ];
+
+        const t2Cols = [
+            '№ п.п.', `Среднемесячная зарплата исполнителей, руб. код 71.12, ${year} г`, 'Количество рабочих дней в месяце (дни)', 'Среднедневная зарплата исполнителей (гр2/гр3) (руб.)', 'Удельный вес заработной платы в себестоимости работ, Кз (%)', 'Рентабельность, Р, (%)', 'Среднедневная единичная выработка (гр4*(1+гр6))/гр5) (руб.)', 'Продолжительность разработки, Тпл (дни)', 'Численность исполнителей, Чпл (чел.)', 'Коэффициент квалификации (участия), Куч(кв)', 'Стоимость работ,С= (гр7хгр8хгр9хгр10) (руб.)'
+        ];
+
+        let t1Widths = ['4%', '24%', '11%', '11%', '11%', '15%', '24%'];
+
+        let table1Body = [
+            [
+                {text: t1Cols[0], style: 'th'}, {text: t1Cols[1], style: 'th'}, 
+                {text: t1Cols[2], style: 'th'}, {text: t1Cols[3], style: 'th'}, 
+                {text: t1Cols[4], style: 'th'}, {text: t1Cols[5], style: 'th'}, {text: t1Cols[6], style: 'th'}
+            ],
+            [
+                {text: '1', style: 'th'}, {text: '2', style: 'th'}, {text: '3', style: 'th'}, {text: '4', style: 'th'}, {text: '5', style: 'th'}, {text: '6', style: 'th'}, {text: '7', style: 'th'}
+            ]
+        ];
+
+        let idx = 1;
+        G_TEAM.forEach(p => {
+            let actualDays = p.days;
+            let contrib = (actualDays / G_CALC_DATA.duration) * p.count * p.index;
+            table1Body.push([
+                idx++, {text: p.name, alignment: 'left'}, actualDays, G_CALC_DATA.duration, p.count, formatNum(p.index), formatNum(contrib, 3)
+            ]);
+        });
+        table1Body.push([
+            {text: idx, bold: true}, {text: 'Итого:', bold: true, alignment: 'left'}, '-', G_CALC_DATA.duration, G_CALC_DATA.people, '-', {text: formatNum(G_CALC_DATA.avgKqv, 3), bold: true}
+        ]);
+
+        let t2Widths = ['4%', '10%', '6%', '8%', '8%', '5%', '10%', '8%', '6%', '10%', '25%'];
+        let table2Body = [
+            t2Cols.map(c => ({ text: c, style: 'th' })),
+            ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'].map(c => ({ text: c, style: 'th' })),
+            [
+                '1', formatNum(G_CALC_DATA.monthlySalary), '21', formatNum(G_CALC_DATA.dailySalary, 0), '40,06', '10', 
+                formatNum(G_CALC_DATA.unitRate, 0), G_CALC_DATA.duration, G_CALC_DATA.people, formatNum(G_CALC_DATA.avgKqv, 3), 
+                formatNum(G_CALC_DATA.baseCost)
+            ]
+        ];
+
+        let footerStack = [];
+        if (G_CALC_DATA.showCoeff) {
+            let decimals = (document.getElementById('coeffPrecision').value === 'exact') ? 9 : parseInt(document.getElementById('coeffPrecision').value);
+            let txt = `Договорной коэффициент: ${G_CALC_DATA.k.toFixed(decimals)}`;
+            if (G_CALC_DATA.applyK) txt += ` от ${formatNum(G_CALC_DATA.baseCost)} руб. = ${formatNum(G_CALC_DATA.costNoVat)}`;
+            footerStack.push({ text: txt, margin: [0, 5, 0, 0] });
+        }
+
+        if (G_CALC_DATA.showVat) {
+            footerStack.push({ columns: [{width: '*', text: 'НДС 20%:'}, {width: 'auto', text: formatNum(G_CALC_DATA.vat)}], margin: [0, 5, 0, 0] });
+            footerStack.push({ canvas: [{ type: 'line', x1: 0, y1: 5, x2: 760, y2: 5, lineWidth: 1 }] });
+            footerStack.push({ columns: [{width: '*', text: 'Всего с НДС (руб.):', bold: true}, {width: 'auto', text: formatNum(G_CALC_DATA.totalWithVat), bold: true}], margin: [0, 10, 0, 0] });
+        } else {
+            footerStack.push({ canvas: [{ type: 'line', x1: 0, y1: 5, x2: 760, y2: 5, lineWidth: 1 }] });
+            footerStack.push({ columns: [{width: '*', text: 'Итоговая стоимость работ:', bold: true}, {width: 'auto', text: formatNum(G_CALC_DATA.totalWithVat), bold: true}], margin: [0, 10, 0, 0] });
+        }
+
+        var docDefinition = {
+            pageOrientation: 'landscape', pageSize: 'A4', pageMargins: [30, 30, 30, 30],
+            content: [
+                { text: `Смета №${document.getElementById('smetaNum').value}`, style: 'header' },
+                { text: document.getElementById('workType').value, style: 'subheader' },
+                { text: `Объект: ${document.getElementById('objectName').value}`, style: 'subheader', margin: [0, 0, 0, 20] },
+                { text: header1Text, style: 'label' },
+                { table: { headerRows: 2, widths: t1Widths, body: table1Body } },
+                { text: header2Text, style: 'label', margin: [0, 20, 0, 5] },
+                { table: { headerRows: 2, widths: t2Widths, body: table2Body } },
+                { stack: footerStack, margin: [0, 15, 0, 0] }
+            ],
+            styles: {
+                header: { fontSize: 14, bold: true, alignment: 'center' },
+                subheader: { fontSize: 11, alignment: 'center' },
+                label: { fontSize: 10, alignment: 'center', margin: [0, 0, 0, 5], bold: true },
+                th: { fontSize: 8, bold: true, fillColor: '#eeeeee', alignment: 'center' } 
+            },
+            defaultStyle: { fontSize: 10, alignment: 'center' } 
+        };
+        pdfMake.createPdf(docDefinition).download(`Smeta_${document.getElementById('smetaNum').value}.pdf`);
+    }
+
+    // --- Excel ---
+    async function downloadStyledExcel() {
+        const year = document.getElementById('yearSelect').value;
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Смета');
+
+        worksheet.columns = [{ width: 8 }, { width: 40 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 12 }, { width: 22 }, { width: 12 }, { width: 12 }, { width: 25 }, { width: 25 }];
+
+        const addMergedHeader = (text) => {
+            let r = worksheet.addRow([text]);
+            worksheet.mergeCells(`A${r.number}:K${r.number}`);
+            r.getCell(1).alignment = { horizontal: 'center', wrapText: true }; r.getCell(1).font = { bold: true, size: 12 }; r.height = null; 
+        }
+        addMergedHeader(`Смета №${document.getElementById('smetaNum').value}`);
+        addMergedHeader(document.getElementById('workType').value);
+        addMergedHeader(`Объект: ${document.getElementById('objectName').value}`);
+        worksheet.addRow([]);
+
+        let rSec1 = worksheet.addRow(["Расчет коэффициента, учитывающего степень участия исполнителей-проектировщиков различной квалификации в выполнении проектных работ"]);
+        worksheet.mergeCells(`A${rSec1.number}:K${rSec1.number}`);
+        rSec1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        rSec1.getCell(1).font = { bold: true };
+
+        const t1Cols = ['№ п.п.', 'Наименование должностей исполнителей', 'Фактическое время участия исполнителя в работе, Тф, (дни)', 'Плановая продолжительность выполнения работы, Тп, (дни)', 'Численность исполнителей одной квалификации, Чi, (чел.)', 'Индекс уровня зарплаты специалистов - исполнителей работы', 'Коэффициент квалификации (участия) специалистов Ккв(уч), сумма((гр3/ итог гр4)хгр5хгр6)/сумма гр5'];
+        const t1Header1 = worksheet.addRow(t1Cols);
+        const t1Header2 = worksheet.addRow(["1", "2", "3", "4", "5", "6", "7"]);
+        t1Header1.height = 100; 
+
+        [t1Header1, t1Header2].forEach(row => {
+            row.eachCell((cell) => {
+                cell.font = { bold: true, size: 9 }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            });
+        });
+
+        let idx = 1;
+        G_TEAM.forEach(p => {
+            let actualDays = p.days;
+            let contrib = (actualDays / G_CALC_DATA.duration) * p.count * p.index;
+            let row = worksheet.addRow([idx++, p.name, actualDays, G_CALC_DATA.duration, p.count, formatNum(p.index), formatNum(contrib, 3)]);
+            row.eachCell(cell => cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} });
+            row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' }; 
+            row.getCell(2).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }; 
+            for(let i=3; i<=7; i++) row.getCell(i).alignment = { horizontal: 'center', vertical: 'middle' }; 
+        });
+        
+        let t1Total = worksheet.addRow([idx, "Итого:", "", G_CALC_DATA.duration, G_CALC_DATA.people, "", formatNum(G_CALC_DATA.avgKqv, 3)]);
+        t1Total.font = { bold: true };
+        t1Total.eachCell(cell => { cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; cell.alignment = { horizontal: 'center', vertical: 'middle' }; });
+        t1Total.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+
+        worksheet.addRow([]);
+        
+        let rSec2 = worksheet.addRow(["Расчет стоимости проектных работ в соответствии с калькуляцией затрат на проектирование"]);
+        worksheet.mergeCells(`A${rSec2.number}:K${rSec2.number}`);
+        rSec2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' }; rSec2.getCell(1).font = { bold: true };
+        
+         const t2Cols = ['№ п.п.', `Среднемесячная зарплата исполнителей, руб. код 71.12, ${year} г`, 'Количество рабочих дней в месяце (дни)', 'Среднедневная зарплата исполнителей (гр2/гр3) (руб.)', 'Удельный вес заработной платы в себестоимости работ, Кз (%)', 'Рентабельность, Р, (%)', 'Среднедневная единичная выработка (гр4*(1+гр6))/гр5) (руб.)', 'Продолжительность разработки, Тпл (дни)', 'Численность исполнителей, Чпл (чел.)', 'Коэффициент квалификации (участия), Куч(кв)', 'Стоимость работ,С= (гр7хгр8хгр9хгр10) (руб.)'];
+        const t2Header1 = worksheet.addRow(t2Cols);
+        const t2Header2 = worksheet.addRow(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]);
+        t2Header1.height = 100;
+
+        [t2Header1, t2Header2].forEach(row => {
+            row.eachCell((cell) => {
+                cell.font = { bold: true, size: 9 }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            });
+        });
+
+        const t2Row = worksheet.addRow(["1", formatNum(G_CALC_DATA.monthlySalary), "21", formatNum(G_CALC_DATA.dailySalary, 0), "40,06", "10", formatNum(G_CALC_DATA.unitRate, 0), G_CALC_DATA.duration, G_CALC_DATA.people, formatNum(G_CALC_DATA.avgKqv, 3), formatNum(G_CALC_DATA.baseCost)]);
+        t2Row.eachCell(cell => { cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; cell.alignment = { horizontal: 'center', vertical: 'middle' }; });
+
+        worksheet.addRow([]);
+
+        const addFooterRow = (label, value, bold = false) => {
+             let r = worksheet.addRow([]);
+             let cLabel = r.getCell(10); let cVal = r.getCell(11);
+             cLabel.value = label; cVal.value = value;
+             cLabel.alignment = { horizontal: 'right' }; cVal.alignment = { horizontal: 'right' };
+             if (bold) { cLabel.font = { bold: true }; cVal.font = { bold: true }; }
+        };
+
+        if (G_CALC_DATA.showCoeff) {
+            let decimals = (document.getElementById('coeffPrecision').value === 'exact') ? 9 : parseInt(document.getElementById('coeffPrecision').value);
+            let val = G_CALC_DATA.k.toFixed(decimals);
+            if (G_CALC_DATA.applyK) val += ` (от ${formatNum(G_CALC_DATA.baseCost)} = ${formatNum(G_CALC_DATA.costNoVat)})`;
+            let r = worksheet.addRow([]);
+            worksheet.mergeCells(`I${r.number}:K${r.number}`);
+            let c = r.getCell(9);
+            c.value = `Договорной коэффициент: ${val}`;
+            c.alignment = { horizontal: 'right' };
+        }
+
+        if (G_CALC_DATA.showVat) {
+            addFooterRow("НДС 20%:", formatNum(G_CALC_DATA.vat));
+            addFooterRow("Всего с НДС:", formatNum(G_CALC_DATA.totalWithVat), true);
+        } else {
+            addFooterRow("Итоговая стоимость:", formatNum(G_CALC_DATA.totalWithVat), true);
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `Smeta_${document.getElementById('smetaNum').value}.xlsx`);
+    }
+
+    window.onload = function() {
+        updateSalaryByYear();
+    };
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Кабинет Исполнителя</title>
+    <script src="//api.bitrix24.com/api/v1/"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* CSS Стили */
+        :root { --primary: #4f46e5; --primary-light: #eef2ff; --primary-hover: #4338ca; --bg-body: #f3f4f6; --bg-surface: #ffffff; --border: #e5e7eb; --text-main: #1f2937; --text-muted: #6b7280; --radius: 12px; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; }
+        * { box-sizing: border-box; outline: none; }
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: var(--bg-body); color: var(--text-main); font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .top-bar { height: 70px; background: var(--bg-surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; flex-shrink: 0; z-index: 100; position: relative; }
+        .app-title { font-size: 18px; font-weight: 600; color: var(--primary); display: flex; align-items: center; gap: 12px; }
+        .user-block { text-align: right; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; }
+        .user-pill { color: var(--primary); font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .finance-stats { display: flex; gap: 12px; margin-top: 4px; font-size: 11px; font-weight: 600; }
+        .stat-item { padding: 2px 8px; border-radius: 12px; display: flex; align-items: center; gap: 4px; }
+        .stat-paid { background: #dcfce7; color: #166534; }
+        .stat-wait { background: #fef3c7; color: #92400e; }
+        .btn-mobile-back { display: none; padding: 8px 12px; margin-right: 8px; background: #f3f4f6; border-radius: 8px; border: none; font-size: 18px; color: var(--text-main); cursor: pointer; }
+        .hidden { display: none !important; }
+        .layout { display: flex; flex: 1; overflow: hidden; position: relative; width: 100%; } 
+        .sidebar { width: 420px; background: var(--bg-surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+        .main { flex: 1; padding: 24px; overflow-y: auto; background: var(--bg-body); display: flex; flex-direction: column; gap: 20px; }
+        .list-container { overflow-y: auto; flex: 1; padding: 16px; background: #f8fafc; }
+        .sidebar-search { padding: 16px; border-bottom: 1px solid var(--border); background: #fff; display: flex; flex-direction: column; gap: 12px; }
+        .search-input { width: 100%; padding: 10px 12px 10px 36px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-body); font-size: 13px; transition: 0.2s; }
+        .search-input:focus { border-color: var(--primary); background: #fff; }
+        .search-wrap { position: relative; }
+        .search-wrap i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+        .project-group { margin-bottom: 12px; border: 1px solid var(--border); background: #fff; border-radius: 12px; overflow: hidden; transition: 0.2s; }
+        .project-group.hidden-by-filter { display: none; }
+        .pg-header { padding: 12px 16px; cursor: pointer; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; background: #fff; transition: 0.2s; }
+        .pg-header:hover { background: #f9fafb; }
+        .pg-info h4 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: var(--text-main); }
+        .pg-addr { font-size: 11px; color: var(--text-muted); display: flex; gap: 4px; align-items: center; }
+        .pg-toggle { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: var(--bg-body); border-radius: 6px; color: var(--text-muted); font-size: 16px; flex-shrink: 0; transition: 0.2s; }
+        .project-group.expanded .pg-toggle { background: var(--primary-light); color: var(--primary); transform: rotate(45deg); }
+        .pg-stages { display: none; background: #f8fafc; border-top: 1px solid var(--border); padding: 8px; }
+        .project-group.expanded .pg-stages { display: block; }
+        .stage-item { padding: 12px; margin-bottom: 6px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text-main); background: #fff; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; transition: all 0.2s; }
+        .stage-item:hover { border-color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .stage-item.active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+        .stage-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+        .stage-title { font-weight: 600; line-height: 1.3; font-size: 13px; }
+        .stage-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+        .stage-date { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+        .st-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; text-transform: uppercase; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; letter-spacing: 0.03em; }
+        .st-closed { background: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
+        .st-work { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .st-wait { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; }
+        .st-archive { background: #e2e8f0; color: #475569; border: 1px solid #cbd5e1; }
+        .deps-list { font-size: 11px; color: #b45309; padding: 8px; background: #fffbeb; border-radius: 6px; margin-top: 4px; border: 1px solid #fcd34d; }
+        .header-compact { background: #fff; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(0,0,0,0.03); overflow: hidden; flex-shrink: 0; }
+        .hc-project { background: #f8fafc; padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+        .hc-row { display: flex; gap: 8px; align-items: flex-start; width: 100%; }
+        .hc-proj-name { font-weight: 600; color: var(--text-main); font-size: 11px; white-space: normal; line-height: 1.4; user-select: text; cursor: text; }
+        .hc-proj-addr { font-size: 11px; color: var(--text-muted); white-space: normal; user-select: text; }
+        .hc-main { padding: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+        .hc-title-block { flex: 1; min-width: 0; }
+        .hc-stage-title { margin: 0 0 8px 0; font-size: 18px; font-weight: 700; line-height: 1.3; color: var(--text-main); }
+        .hc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .hc-action { flex-shrink: 0; }
+        .workspace-split { display: flex; gap: 24px; align-items: flex-start; height: 100%; }
+        .workspace-left { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+        .workspace-right { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; }
+        .doc-grid-new { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .doc-card-wide { grid-column: 1 / -1; }
+        .doc-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; height: 100%; }
+        .doc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--border); }
+        .doc-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+        .doc-body { flex: 1; min-height: 120px; } 
+        .files-mini-grid { display: flex; flex-direction: column; gap: 6px; }
+        .file-chip { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; cursor: pointer; transition: 0.1s; max-width: 100%; overflow: hidden; }
+        .file-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-chip:hover { border-color: var(--primary); background: #fff; }
+        .file-chip i { font-size: 14px; flex-shrink: 0; }
+        .file-chip i.bi-folder-fill { color: #f59e0b; }
+        .file-chip i.bi-file-earmark-text { color: var(--primary); }
+        .history-container { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; max-height: calc(100vh - 200px); overflow-y: auto; position: sticky; top: 0; }
+        .hist-item { padding: 12px 0; border-bottom: 1px solid #f3f4f6; } 
+        .hist-item:first-child { padding-top: 0; }
+        .hist-item:last-child { border-bottom: none; }
+        .hist-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+        .hist-title { font-weight: 600; font-size: 13px; color: var(--text-main); }
+        .hist-ver { font-weight: 700; color: var(--primary); font-size: 11px; margin-left: 6px; }
+        .hist-date { font-size: 11px; color: var(--text-muted); }
+        .hist-comm { margin-top: 8px; padding: 8px 10px; background: #fef2f2; color: #b91c1c; border-radius: 6px; font-size: 12px; line-height: 1.4; }
+        .tabs { height: 50px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); padding: 0 24px; background: #fff; flex-shrink: 0; overflow-x: auto; }
+        .tab { padding: 0 16px; display:flex; align-items:center; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; color: var(--text-muted); transition: 0.2s; font-size: 14px; white-space: nowrap; }
+        .tab:hover { color: var(--primary); }
+        .tab.active { border-bottom-color: var(--primary); color: var(--primary); font-weight: 600; }
+        .btn { padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-sm { padding: 4px 8px; font-size: 11px; }
+        .tag { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 500; display: inline-block; }
+        .tag-blue { background: #eff6ff; color: #1d4ed8; border: 1px solid #dbeafe; }
+        .tag-yellow { background: #fffbeb; color: #b45309; }
+        .tag-green { background: #f0fdf4; color: #15803d; }
+        .tag-red { background: #fef2f2; color: #991b1b; }
+        .spinner { animation: spin 1s infinite linear; font-size: 24px; color: var(--primary); }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        /* ТОВАРЫ И ПОДЗАДАЧИ */
+        .stage-product-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #f9fafb; transition: 0.2s; }
+        .stage-product-card:hover { background: #fff; border-color: var(--primary); }
+        .product-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; cursor: pointer; user-select: none; }
+        .product-title { font-weight: 600; color: var(--text-main); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .product-toggle { color: var(--text-muted); font-size: 16px; transition: 0.2s; }
+        .stage-product-card.expanded .product-toggle { transform: rotate(90deg); }
+        .product-deadlines { display: flex; gap: 12px; font-size: 11px; color: var(--text-muted); margin-bottom: 10px; }
+        .deadline-box { padding: 4px 8px; background: #fff; border-radius: 6px; border: 1px solid #e5e7eb; }
+        .deadline-label { font-weight: 600; }
+        .deadline-date { color: var(--primary); font-weight: 700; }
+        .subtasks-container { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+        .stage-product-card.expanded .subtasks-container { display: flex; flex-direction: column; gap: 8px; }
+        .subtask-item { display: flex; align-items: center; gap: 10px; padding: 8px; background: #fff; border-radius: 6px; border: 1px solid #e5e7eb; font-size: 12px; }
+        .subtask-checkbox { width: 18px; height: 18px; cursor: pointer; flex-shrink: 0; }
+        .subtask-info { flex: 1; min-width: 0; }
+        .subtask-title { font-weight: 500; color: var(--text-main); margin-bottom: 2px; }
+        .subtask-meta { display: flex; gap: 8px; font-size: 11px; color: var(--text-muted); }
+        .subtask-type { background: #eef2ff; color: #4f46e5; padding: 2px 6px; border-radius: 4px; }
+        .subtask-status { background: #f0fdf4; color: #15803d; padding: 2px 6px; border-radius: 4px; }
+        .subtask-status.blocked { background: #fef2f2; color: #991b1b; }
+        .subtask-status.in-progress { background: #fffbeb; color: #b45309; }
+        
+        .drawer { position: absolute; top:0; right:0; width: 550px; height:100%; background: #fff; box-shadow: -10px 0 40px rgba(0,0,0,0.2); display: flex; flex-direction: column; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        textarea, select { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; font-family: inherit; margin-bottom: 16px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 13px; }
+        .work-table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--bg-surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+        .work-table th { background: #f9fafb; padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+        .work-table td { padding: 16px; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+        .work-table tr:last-child td { border-bottom: none; }
+        
+        /* FILTERS */
+        .filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+        .filter-chk { display: none; }
+        .filter-label { font-size: 11px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); font-weight: 600; transition: 0.2s; user-select: none; background: #fff; }
+        .filter-label:hover { background: #f9fafb; border-color: #cbd5e1; }
+        .filter-chk:checked + .filter-label { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+
+        /* PROFILE */
+.area-grid { 
+    display: grid; 
+    grid-template-columns: repeat(2, 1fr); /* 2 фиксированных столбца */
+    gap: 8px; 
+    margin-bottom: 20px; 
+}
+.area-item { 
+    font-size: 12px; 
+    padding: 10px 12px; 
+    border-radius: 8px; 
+    border: 1px solid var(--border); 
+    cursor: pointer; 
+    background: #fff; 
+    transition: 0.2s; 
+    user-select: none; 
+    text-align: center; /* Чтобы текст был по центру */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px; /* Чтобы кнопки были одинаковой высоты */
+}
+.area-item:hover { border-color: var(--primary); }
+.area-item.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+        /* DRAG AND DROP */
+        .drop-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 30px 20px; text-align: center; background: #f8fafc; transition: 0.2s; cursor: pointer; position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .drop-zone:hover { border-color: var(--primary); background: #eef2ff; }
+        .drop-zone.drag-over { border-color: var(--primary); background: #e0e7ff; transform: scale(0.99); }
+        .drop-zone i { font-size: 32px; color: var(--text-muted); transition: 0.2s; }
+        .drop-zone:hover i, .drop-zone.drag-over i { color: var(--primary); }
+        .drop-text { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+        .file-preview-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+        .file-preview-item { display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; }
+        .file-preview-name { display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-right: 10px; }
+        .btn-remove-file { color: #ef4444; cursor: pointer; font-size: 16px; padding: 4px; display: flex; align-items: center; }
+        .btn-remove-file:hover { color: #b91c1c; }
+        .file-count-badge { font-size: 11px; background: var(--bg-body); padding: 2px 6px; border-radius: 4px; color: var(--text-muted); }
+        .btn-icon-sm { background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 6px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; margin-left: 8px; }
+        .btn-icon-sm:hover { color: var(--primary); border-color: var(--primary); background: var(--primary-light); }
+        .btn-icon-sm.hidden { display: none !important; }
+        
+        /*TENDER*/
+        .tender-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.tender-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+.tender-title { font-size: 16px; font-weight: 600; color: var(--text-main); margin-bottom: 4px; }
+.tender-obj { font-size: 13px; color: var(--text-muted); }
+.tender-form { background: #f9fafb; padding: 16px; border-radius: 8px; margin-top: 16px; display: grid; gap: 12px; grid-template-columns: 1fr 2fr auto; align-items: end; }
+.tender-status { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: #fee2e2; color: #991b1b; }
+.tender-status.active { background: #dcfce7; color: #166534; }
+.tender-status.sent { background: #fef3c7; color: #b45309; }
+
+        /* STATUS MODAL */
+        .status-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 2000; display: none; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s; }
+        .status-modal { background: #fff; border-radius: 16px; padding: 32px; width: 320px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); transform: scale(0.9); transition: transform 0.3s; }
+        .status-modal-overlay.active { display: flex; opacity: 1; }
+        .status-modal-overlay.active .status-modal { transform: scale(1); }
+        .status-icon { font-size: 48px; margin-bottom: 16px; }
+        .status-icon.loading { color: var(--primary); animation: spin 1s infinite linear; }
+        .status-icon.success { color: var(--success); }
+        .status-icon.error { color: var(--danger); }
+        .status-title { font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 8px; }
+        .status-text { font-size: 14px; color: var(--text-muted); line-height: 1.5; margin-bottom: 24px; }
+        .status-btn { width: 100%; }
+
+        @media (max-width: 1200px) { .workspace-split { flex-direction: column; } .workspace-right { width: 100%; } .history-container { max-height: none; overflow: visible; position: static; } }
+        @media (max-width: 900px) { .doc-grid-new { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .app-title span { display: none; } .user-pill { padding: 4px 8px; font-size: 11px; } .top-bar { padding: 0 16px; } .layout { display: block; width: 100%; height: calc(100vh - 120px); position: relative; } #view-works { width: 100%; height: 100%; } #view-works .sidebar { width: 100%; height: 100%; display: flex; border-right: none; } #view-works .main { display: none; } body.mobile-detail-view #view-works .sidebar { display: none !important; } body.mobile-detail-view #view-works .main { display: flex !important; width: 100%; height: 100%; padding: 16px; background: #fff; z-index: 20; } .main:not(#view-works) { width: 100%; height: 100%; padding: 16px; } body.mobile-detail-view .btn-mobile-back { display: inline-block; } .drawer { width: 100%; } .hc-main { flex-direction: column; gap: 12px; padding: 16px; } .hc-action button { width: 100%; justify-content: center; padding: 12px; } .work-table { display: block; overflow-x: auto; white-space: nowrap; } #tendersList { grid-template-columns: 1fr; } #emptyState { margin-top: 40px; } }
+    </style>
+</head>
+<body>
+    
+    <div class="top-bar">
+        <div style="display:flex; align-items:center;">
+            <button class="btn-mobile-back" onclick="backToMobileList()"><i class="bi bi-chevron-left"></i></button>
+            <div class="app-title"><i class="bi bi-tools"></i> <span>Кабинет Исполнителя</span></div>
+        </div>
+        <div class="user-block">
+            <div class="user-pill"><i class="bi bi-person-circle"></i> <span id="contractorName">...</span></div>
+            <div class="finance-stats" id="financeHeaderStats" style="display:none;">
+                <div class="stat-item stat-paid"><i class="bi bi-check-circle-fill"></i> <span id="sumPaid">0</span></div>
+                <div class="stat-item stat-wait"><i class="bi bi-hourglass-split"></i> <span id="sumWait">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchMainTab('works', this)">🏗️ Мои Объекты</div>
+        <div class="tab" onclick="switchMainTab('tenders', this)">🔍 Тендеры</div>
+        <div class="tab" id="tabFinanceHeader" onclick="switchMainTab('finance', this)">💰 Финансы</div>
+        <div class="tab" id="tabProfileHeader" onclick="switchMainTab('profile', this)" style="display:none;">⚙️ Профиль</div>
+    </div>
+
+    <div id="loader" style="position: absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; z-index:200;">
+        <div class="spinner"><i class="bi bi-arrow-repeat"></i></div>
+        <p style="margin-top:10px; color:var(--text-muted);">Загрузка данных...</p>
+    </div>
+
+    <!-- WORK AREA -->
+    <div id="view-works" class="layout">
+        <div class="sidebar">
+            <div class="sidebar-search">
+                <div class="search-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="search-input" id="projectSearch" placeholder="Поиск объекта или адреса..." oninput="filterProjects()">
+                </div>
+                <!-- ФИЛЬТРЫ -->
+                <div class="filter-row">
+                    <label><input type="checkbox" class="filter-chk" checked onchange="toggleFilter('WORK')"><span class="filter-label">В работе</span></label>
+                    <label><input type="checkbox" class="filter-chk" checked onchange="toggleFilter('WAIT')"><span class="filter-label">Ожидание</span></label>
+                    <label><input type="checkbox" class="filter-chk" onchange="toggleFilter('CLOSED')"><span class="filter-label">Закрытые</span></label>
+                    <label><input type="checkbox" class="filter-chk" onchange="toggleFilter('ARCHIVE')"><span class="filter-label">Архив</span></label>
+                </div>
+            </div>
+            <div id="treeList" class="list-container">
+                <div style="text-align:center; padding:20px; color:#999;">Загрузка списка...</div>
+            </div>
+        </div>
+        
+        <div class="main">
+            <div id="emptyState" style="text-align:center; margin-top:100px; opacity:0.5;">
+                <i class="bi bi-bricks" style="font-size:48px; color:#cbd5e1;"></i>
+                <h3 style="margin-top:16px; color:var(--text-muted);">Выберите этап работ</h3>
+                <p style="font-size:13px; color:#94a3b8;">В меню слева найдите объект и нажмите на этап</p>
+            </div>
+
+            <div id="mainWorkContainer" class="hidden" style="display:flex; flex-direction:column; gap:20px; height:100%;">
+                
+                <div class="header-compact">
+                    <div class="hc-project">
+                        <div class="hc-row">
+                            <i class="bi bi-building" style="color:var(--primary); margin-top:2px;"></i>
+                            <div class="hc-proj-name" id="headProjName"></div>
+                        </div>
+                        <div class="hc-row">
+                            <i class="bi bi-geo-alt" style="color:var(--text-muted); font-size:12px; margin-top:1px;"></i>
+                            <div class="hc-proj-addr" id="headProjAddr"></div>
+                        </div>
+                    </div>
+                    <div class="hc-main">
+                        <div class="hc-title-block">
+                            <h2 class="hc-stage-title" id="headStageTitle"></h2>
+                            <div class="hc-tags" id="headProducts"></div>
+                        </div>
+                        <div class="hc-action">
+                            <button class="btn btn-primary" onclick="openDrawer()"><i class="bi bi-cloud-upload"></i> Сдать работу</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- НОВЫЙ БЛОК: Товары и подзадачи -->
+                <div id="stageProductsBlock" style="display: none; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 12px 0; font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+                        <i class="bi bi-box2"></i> Товары и подзадачи
+                    </h4>
+                    <div id="stageProductsContainer" style="display: flex; flex-direction: column; gap: 12px;"></div>
+                </div>
+
+                <div class="workspace-split">
+                    <div class="workspace-left">
+                        <div class="doc-grid-new">
+                            <!-- Карточка ТЗ -->
+                            <div class="doc-card">
+                                <div class="doc-head">
+                                    <div class="doc-title">
+                                        <i class="bi bi-file-earmark-code"></i> ТЗ (Задание)
+                                        <button class="btn-icon-sm hidden" id="btnDlTZ" title="Скачать папку архивом">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="doc-body files-mini-grid" id="listTZ"></div>
+                            </div>
+                            <!-- Карточка Документы -->
+                            <div class="doc-card">
+                                <div class="doc-head">
+                                    <div class="doc-title">
+                                        <i class="bi bi-folder2-open"></i> Документы
+                                        <button class="btn-icon-sm hidden" id="btnDlOther" title="Скачать папку архивом">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="doc-body files-mini-grid" id="listOther"></div>
+                            </div>
+                            <!-- Карточка Результаты -->
+                            <div class="doc-card doc-card-wide" style="border-color: #cbd5e1; box-shadow: 0 4px 6px -4px rgba(0,0,0,0.1);">
+                                <div class="doc-head">
+                                    <div class="doc-title" style="color:var(--primary);">
+                                        <div style="display:flex; align-items:center; gap:6px;">
+                                            <i class="bi bi-briefcase-fill"></i> Результаты
+                                            <button class="btn-icon-sm hidden" id="btnDlRes" title="Скачать папку">
+                                                <i class="bi bi-download"></i>
+                                            </button>
+                                        </div>
+                                        <div id="resNav" style="display:none; align-items:center; gap:4px; margin-left:10px;">
+                                            <button class="btn btn-sm btn-outline" onclick="goUpResults()" style="padding:2px 6px;"><i class="bi bi-arrow-left"></i></button>
+                                            <span id="resBreadcrumbs" style="font-size:10px; max-width:150px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="doc-body files-mini-grid" id="listResults" style="min-height: 200px;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="workspace-right">
+                        <div class="history-container">
+                            <h4 style="margin:0 0 12px 0; font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">
+                                <i class="bi bi-clock-history"></i> История сдачи
+                            </h4>
+                            <div id="historyList"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- TENDERS -->
+<div id="view-tenders" class="main hidden" style="background:#f8fafc;">
+        <div style="max-width: 1000px; margin: 0 auto; width: 100%;">
+            <h2 style="margin-bottom:20px;">Доступные тендеры</h2>
+            <!-- Сетка тендеров -->
+            <div id="tendersList" style="display:flex; flex-direction:column; gap:16px;"></div>
+        </div>
+    </div>
+
+    <!-- FINANCE (Hidden for Employees) -->
+    <div id="view-finance" class="main hidden" style="background:#f8fafc;">
+        <div style="max-width: 1000px; margin: 0 auto; width: 100%;">
+            <h2 style="margin-bottom:20px;">Финансы и Платежи</h2>
+            <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+                <table class="work-table">
+                    <thead><tr><th>Назначение платежа</th><th>Сумма</th><th>Статус оплаты</th></tr></thead>
+                    <tbody id="financeList"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- PROFILE (Managers Only) -->
+    <div id="view-profile" class="main hidden" style="background:#f8fafc;">
+        <div style="max-width: 800px; margin: 0 auto; width: 100%;">
+            <h2 style="margin-bottom:20px;">Профиль Компании</h2>
+            <div style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:24px;">
+                <h4 style="margin-top:0;">Направления работы</h4>
+                <p style="color:var(--text-muted); font-size:13px; margin-bottom:20px;">Выберите виды работ, которые выполняет ваша компания. Это поможет нам приглашать вас в соответствующие тендеры.</p>
+                <div id="areaList" class="area-grid">
+                    <div class="spinner"></div>
+                </div>
+                <button class="btn btn-primary" onclick="saveProfile()" id="btnSaveProfile">Сохранить изменения</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DRAWER С DRAG-AND-DROP -->
+    <div id="drawerUpload" class="drawer-overlay">
+        <div class="drawer">
+            <div style="padding:24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0">Сдать результат</h3>
+                <button onclick="closeDrawer()" style="border:none; background:none; font-size:24px; cursor:pointer;">&times;</button>
+            </div>
+            <div style="padding:24px; flex:1; overflow-y:auto; background:#f9fafb;">
+                <label>Что сдаете?</label>
+                <select id="uplProduct"></select>
+                
+                <label>Комментарий</label>
+                <textarea id="uplComment" rows="4" placeholder="Опишите выполненные объемы..."></textarea>
+                
+                <label style="display:flex; justify-content:space-between;">
+                    <span>Файлы (Акты, Фото)</span>
+                    <span class="file-count-badge" id="fileCounter">0 / 20</span>
+                </label>
+                
+                <div class="drop-zone" id="dropArea" onclick="document.getElementById('uplFilesInput').click()">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                    <div class="drop-text">Перетащите файлы сюда<br>или кликните для выбора</div>
+                    <input type="file" id="uplFilesInput" multiple style="display:none" onchange="handleFiles(this.files)">
+                </div>
+                
+                <div id="filePreviewList" class="file-preview-list"></div>
+
+                <div style="font-size:11px; color:#999; margin-top:10px; text-align:center;">
+                    Максимум 20 файлов за раз. Размер файла не ограничен.
+                </div>
+            </div>
+            <div style="padding:24px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:12px;">
+                <button class="btn btn-outline" onclick="closeDrawer()">Отмена</button>
+                <button class="btn btn-primary" id="btnSubmit" onclick="submitResult()">Отправить ГИПу</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STATUS MODAL -->
+    <div id="statusModal" class="status-modal-overlay">
+        <div class="status-modal">
+            <div id="modalIcon" class="status-icon loading"><i class="bi bi-arrow-repeat"></i></div>
+            <div id="modalTitle" class="status-title">Загрузка...</div>
+            <div id="modalText" class="status-text">Пожалуйста, подождите, пока файлы загружаются на сервер.</div>
+            <button id="modalBtn" class="btn btn-primary status-btn" onclick="closeStatusModal()">Закрыть</button>
+        </div>
+    </div>
+
+<script>
+    const API_URL = 'https://for-apps.ru/ispgippanels_app/api.php'; 
+
+    const CONFIG = {
+        SP_RESULTS: 1334, 
+        FIELD_STAGE_DEADLINE: 'ufCrm86_1763847030',
+        FIELD_STAGE_PRODUCTS: 'ufCrm86_1763845210',
+        FIELD_STAGE_DEPS: 'ufCrm86_1763846881',
+        FIELD_STAGE_CUSTOM_STATUS: 'ufCrm86_1763860705',
+        FIELD_STAGE_LINK_SUB: 'ufCrm86_1764881202',
+        RES_LINK_STAGE: 'ufCrm106_1764863399', 
+        FIELD_OBJ_NAME: 'UF_CRM_1761037276',
+        FIELD_OBJ_ADDR: 'UF_CRM_1761037367',
+        FIELD_FOLDER_TZ: 'UF_CRM_1764865114',
+        FIELD_FOLDER_OTHER: 'UF_CRM_1764867444',
+        RES_FOLDER_PATH: 'ufCrm106_1765058469', 
+        STAGES: { SENT_WITH_REMARKS: 'DT1334_130:UC_555555' },
+        RES_FIELDS: {
+            GIP_COMM: 'ufCrm106_1764863382',
+            PRODUCT: 'ufCrm106_1764863344',
+            VERSION: 'ufCrm106_1764931105'
+        }
+    };
+
+    let subToDealMap = {};
+    let projectsCache = {}; 
+    let allKnownStagesMap = {}; 
+    let currentDealId = 0;
+    let currentStage = null;
+    let currentUserData = null;
+    let explorerState = { rootId: null, currentId: null, currentName: '', history: [] };
+    
+    // ФИЛЬТРЫ
+    let filterState = { WORK: true, WAIT: true, CLOSED: false, ARCHIVE: false };
+
+    // РОЛИ И НАСТРОЙКИ КОМПАНИИ
+    let userRole = 'employee'; // manager | employee
+    let userCompanyId = 0;
+    let selectedWorkAreas = []; // ID разделов
+
+    const appCache = { bitrix: {}, yandex: {} };
+    let collectedFiles = []; 
+    const MAX_FILES = 20;
+
+    function safeOpen(url) {
+        if(!url) return;
+        const isMobileApp = navigator.userAgent.includes('Bitrix24') && (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('Android'));
+        if (isMobileApp && typeof BX24 !== 'undefined' && BX24.openPath) {
+             BX24.openPath(url);
+        } else {
+             const link = document.createElement('a'); link.href = url; link.target = '_blank';
+             link.rel = 'noopener noreferrer'; link.download = ''; 
+             document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+    }
+
+    async function serverCall(action, params = {}, files = null) {
+        if (currentUserData && currentUserData.ID && !params.userId) params.userId = currentUserData.ID;
+        let body;
+        let headers = {};
+        if (files) {
+            const formData = new FormData();
+            formData.append('action', action);
+            for (const key in params) { formData.append(key, params[key]); }
+            for (let i = 0; i < files.length; i++) { formData.append('uploadFiles[]', files[i]); }
+            body = formData;
+        } else {
+            headers['Content-Type'] = 'application/json';
+            body = JSON.stringify({ action, ...params });
+        }
+        try {
+            const response = await fetch(API_URL, { method: 'POST', headers: headers, body: body });
+            const text = await response.text();
+            let data;
+            try { data = JSON.parse(text); } catch (e) { console.error("Bad JSON:", text); throw new Error("Ошибка сервера: " + text.substring(0, 100)); }
+            if(data.error) throw new Error(data.error);
+            return data;
+        } catch (e) { console.error("API Error:", e); throw e; }
+    }
+
+    BX24.init(async () => {
+        try {
+            const user = await new Promise(r => BX24.callMethod('user.current', {}, x => r(x.data())));
+            currentUserData = user;
+            document.getElementById('contractorName').innerText = (user.NAME || '') + ' ' + (user.LAST_NAME || '');
+            
+            const data = await serverCall('getInitialData', { userId: user.ID });
+            
+            if (data.empty) {
+                document.getElementById('treeList').innerHTML = `<div style="padding:20px;text-align:center;color:#999">${data.message}</div>`;
+            } else {
+                userRole = data.role || 'employee';
+                userCompanyId = data.companyId;
+                selectedWorkAreas = data.workAreas || [];
+                
+                // Настройка интерфейса под роль
+                if (userRole === 'manager') {
+                    document.getElementById('tabProfileHeader').style.display = 'flex';
+                    // Финансы показываем
+                } else {
+                    document.getElementById('tabFinanceHeader').style.display = 'none';
+                }
+
+                processAndRenderData(data);
+            }
+            
+            loadTenders();
+            document.getElementById('loader').classList.add('hidden');
+            document.getElementById('view-works').classList.remove('hidden');
+        } catch (e) { document.getElementById('loader').innerHTML = `<p style="color:red">Ошибка: ${e.message}</p>`; }
+    });
+
+    window.switchMainTab = (id, b) => { 
+        window.backToMobileList(); 
+        ['works','tenders','finance','profile'].forEach(v=>document.getElementById('view-'+v).classList.add('hidden')); 
+        document.getElementById('view-'+id).classList.remove('hidden'); 
+        document.querySelectorAll('.tabs .tab').forEach(x=>x.classList.remove('active')); 
+        b.classList.add('active'); 
+        
+        if(id === 'profile') loadProfileData();
+    };
+
+    // --- ЛОГИКА ПРОФИЛЯ ---
+    async function loadProfileData() {
+        const cont = document.getElementById('areaList');
+        cont.innerHTML = '<div class="spinner"></div>';
+        
+        try {
+            const sections = await serverCall('getSections');
+            renderProfileAreas(sections);
+        } catch(e) {
+            cont.innerHTML = 'Ошибка загрузки направлений';
+        }
+    }
+
+    function renderProfileAreas(sections) {
+        const cont = document.getElementById('areaList');
+        cont.innerHTML = '';
+        sections.forEach(s => {
+            const el = document.createElement('div');
+            el.className = 'area-item' + (selectedWorkAreas.includes(s.ID) || selectedWorkAreas.includes(Number(s.ID)) ? ' selected' : '');
+            el.innerText = s.NAME;
+            el.onclick = () => toggleArea(el, s.ID);
+            cont.appendChild(el);
+        });
+    }
+
+    function toggleArea(el, id) {
+        id = Number(id);
+        if (selectedWorkAreas.includes(id)) {
+            selectedWorkAreas = selectedWorkAreas.filter(x => x !== id);
+            el.classList.remove('selected');
+        } else {
+            selectedWorkAreas.push(id);
+            el.classList.add('selected');
+        }
+    }
+
+    async function saveProfile() {
+        const btn = document.getElementById('btnSaveProfile');
+        btn.disabled = true; btn.innerText = 'Сохранение...';
+        try {
+            await serverCall('saveCompanyProfile', { companyId: userCompanyId, areas: selectedWorkAreas });
+            showStatusModal('success', 'Сохранено', 'Профиль компании обновлен.');
+        } catch(e) {
+            showStatusModal('error', 'Ошибка', e.message);
+        } finally {
+            btn.disabled = false; btn.innerText = 'Сохранить изменения';
+        }
+    }
+
+    // --- ФИЛЬТРЫ ---
+    window.toggleFilter = (key) => {
+        filterState[key] = !filterState[key];
+        renderTree();
+    };
+
+    const dropArea = document.getElementById('dropArea');
+    if(dropArea) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => { dropArea.addEventListener(eventName, preventDefaults, false); });
+        ['dragenter', 'dragover'].forEach(eventName => { dropArea.addEventListener(eventName, highlight, false); });
+        ['dragleave', 'drop'].forEach(eventName => { dropArea.addEventListener(eventName, unhighlight, false); });
+        dropArea.addEventListener('drop', handleDrop, false);
+    }
+
+    function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+    function highlight(e) { dropArea.classList.add('drag-over'); }
+    function unhighlight(e) { dropArea.classList.remove('drag-over'); }
+    function handleDrop(e) { const dt = e.dataTransfer; const files = dt.files; handleFiles(files); }
+
+    function handleFiles(files) {
+        if (collectedFiles.length + files.length > MAX_FILES) {
+            alert(`Слишком много файлов! Можно загрузить максимум ${MAX_FILES} шт. за раз.`);
+            return;
+        }
+        ([...files]).forEach(file => { collectedFiles.push(file); });
+        renderFileList();
+    }
+
+    function renderFileList() {
+        const list = document.getElementById('filePreviewList');
+        const counter = document.getElementById('fileCounter');
+        list.innerHTML = '';
+        counter.innerText = `${collectedFiles.length} / ${MAX_FILES}`;
+        collectedFiles.forEach((file, index) => {
+            const div = document.createElement('div');
+            div.className = 'file-preview-item';
+            let icon = 'bi-file-earmark';
+            if (file.type.includes('image')) icon = 'bi-file-earmark-image';
+            if (file.type.includes('pdf')) icon = 'bi-file-earmark-pdf';
+            if (file.name.includes('.rar') || file.name.includes('.zip')) icon = 'bi-file-earmark-zip';
+            const sizeStr = (file.size / (1024*1024)).toFixed(2) + ' MB';
+            div.innerHTML = `<div class="file-preview-name"><i class="bi ${icon}" style="color:var(--primary)"></i><span>${file.name}</span><span style="color:#999; margin-left:5px;">(${sizeStr})</span></div><div class="btn-remove-file" onclick="removeFile(${index})"><i class="bi bi-x-circle"></i></div>`;
+            list.appendChild(div);
+        });
+    }
+
+    function removeFile(index) {
+        collectedFiles.splice(index, 1);
+        renderFileList();
+        document.getElementById('uplFilesInput').value = ''; 
+    }
+
+    async function downloadFolder(path) {
+        if (!path) return;
+        const btn = event.currentTarget; 
+        const originalIcon = btn.innerHTML;
+        btn.innerHTML = '<div class="spinner" style="font-size:14px; width:14px; height:14px;"></div>';
+        btn.disabled = true;
+        try {
+            const res = await serverCall('downloadFolderLink', { path: path });
+            if (res.success && res.url) { window.open(res.url, '_blank'); } 
+            else { alert('Ошибка: ' + (res.error || 'Не удалось получить ссылку')); }
+        } catch (e) { console.error(e); alert('Ошибка сети'); } 
+        finally { btn.innerHTML = originalIcon; btn.disabled = false; }
+    }
+
+    window.openDrawer = () => { 
+        const s = document.getElementById('uplProduct'); 
+        s.innerHTML=''; 
+        (window.currentStageProducts||[]).forEach(p=>s.innerHTML+=`<option value="${p.name}">${p.name}</option>`); 
+        if(!s.innerHTML) s.innerHTML='<option>Результат</option>'; 
+        collectedFiles = []; 
+        document.getElementById('uplComment').value = '';
+        document.getElementById('uplFilesInput').value = '';
+        renderFileList();
+        document.getElementById('drawerUpload').style.display='flex'; 
+    };
+
+    function showStatusModal(state, title, message) {
+        const modal = document.getElementById('statusModal');
+        const icon = document.getElementById('modalIcon');
+        const titleEl = document.getElementById('modalTitle');
+        const textEl = document.getElementById('modalText');
+        const btn = document.getElementById('modalBtn');
+        modal.classList.add('active');
+        titleEl.innerText = title;
+        textEl.innerText = message;
+        icon.className = 'status-icon';
+        if (state === 'loading') {
+            icon.classList.add('loading');
+            icon.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+            btn.style.display = 'none'; 
+        } else if (state === 'success') {
+            icon.classList.add('success');
+            icon.innerHTML = '<i class="bi bi-check-circle-fill"></i>';
+            btn.style.display = 'block';
+        } else if (state === 'error') {
+            icon.classList.add('error');
+            icon.innerHTML = '<i class="bi bi-exclamation-circle-fill"></i>';
+            btn.style.display = 'block';
+        }
+    }
+
+    function closeStatusModal() {
+        document.getElementById('statusModal').classList.remove('active');
+    }
+
+    async function submitResult() {
+        const productName = document.getElementById('uplProduct').value; 
+        const comment = document.getElementById('uplComment').value;
+        if(!collectedFiles.length) { alert('Нет файлов для загрузки'); return; }
+        closeDrawer();
+        showStatusModal('loading', 'Загрузка...', `Загружаем ${collectedFiles.length} файлов на сервер. Пожалуйста, не закрывайте вкладку.`);
+        try {
+            const params = {
+                dealId: currentDealId, 
+                stageId: currentStage.id, 
+                subId: currentStage._subId, 
+                product: productName, 
+                comment: comment,
+                objName: document.getElementById('headProjName').innerText
+            };
+            const res = await serverCall('uploadResultSmart', params, collectedFiles);
+            if(res.success) {
+                let newItemId = res.itemId || res.id || (res.data ? res.data.id : null);
+                const newPath = res.fullPath || res.yandexPath || (res.data ? res.data.fullPath : null);
+                if (!newItemId) {
+                    try {
+                        const latestItem = await new Promise(resolve => {
+                            BX24.callMethod('crm.item.list', {
+                                entityTypeId: CONFIG.SP_RESULTS,
+                                order: {id: 'DESC'},
+                                filter: { ['='+CONFIG.RES_LINK_STAGE]: currentStage.id },
+                                select: ['id'], start: 0
+                            }, result => resolve(result.data()?.items?.[0] || null));
+                        });
+                        if (latestItem) newItemId = latestItem.id;
+                    } catch (err) { console.error(err); }
+                }
+                if (newItemId && newPath) {
+                    await new Promise(r => BX24.callMethod('crm.item.update', {
+                        entityTypeId: CONFIG.SP_RESULTS, id: newItemId,
+                        fields: { [CONFIG.RES_FOLDER_PATH]: newPath }
+                    }, r));
+                }
+                loadHistory(currentStage.id); 
+                appCache.yandex = {}; 
+                if(newPath && !explorerState.rootId) { explorerState.rootId = newPath; initResultsExplorer(newPath); }
+                else if (explorerState.rootId) { loadYandexContent(explorerState.rootId); }
+                showStatusModal('success', 'Отлично!', 'Файлы успешно загружены и отправлены на проверку.');
+            } else { 
+                throw new Error(res.error || 'Ошибка сервера'); 
+            }
+        } catch(e) { console.error(e); showStatusModal('error', 'Ошибка', e.message); }
+    }
+
+    function processAndRenderData(data) {
+        subToDealMap = {};
+        if (data.subcontracts) data.subcontracts.forEach(i => { if(i.parentId2) subToDealMap[i.id] = i.parentId2; });
+        projectsCache = {};
+        if (data.deals) data.deals.forEach(d => { projectsCache[d.ID] = { info: d, stages: [] }; });
+        
+        const myStages = data.stages || [];
+        allKnownStagesMap = {};
+        myStages.forEach(s => { allKnownStagesMap[s.id] = { title: s.title, status: s[CONFIG.FIELD_STAGE_CUSTOM_STATUS] }; });
+
+        myStages.forEach(s => {
+            const p = parseProducts(s[CONFIG.FIELD_STAGE_PRODUCTS]);
+            if (p.length === 0) return; 
+            s._parsedProducts = p;
+            s._subId = s[CONFIG.FIELD_STAGE_LINK_SUB];
+            
+            // Получаем сделку-родителя для проверки на АРХИВ
+            const dId = subToDealMap[s._subId];
+            let parentDeal = null;
+            if (dId && projectsCache[dId]) parentDeal = projectsCache[dId].info;
+
+            s._displayStatus = calculateStageStatus(s, parentDeal);
+            
+            if(parentDeal) projectsCache[dId].stages.push(s);
+        });
+        renderTree(); renderFinance(data.expenses || []);
+    }
+
+    function calculateStageStatus(stage, parentDeal) {
+        // Проверка на АРХИВ по сделке
+        if (parentDeal && parentDeal.STAGE_ID && (parentDeal.STAGE_ID.includes(':WON') || parentDeal.STAGE_ID === 'WON')) {
+            return { type: 'ARCHIVE', text: 'Архив' };
+        }
+
+        const selfStatus = stage[CONFIG.FIELD_STAGE_CUSTOM_STATUS];
+        if(selfStatus === 'Закрыт') return { type: 'CLOSED', text: 'Закрыт' };
+        const rawDeps = stage[CONFIG.FIELD_STAGE_DEPS];
+        if(!rawDeps) return { type: 'WORK', text: 'В работе' };
+        let waitingFor = [];
+        const arr = Array.isArray(rawDeps) ? rawDeps : [rawDeps];
+        arr.forEach(dStr => {
+            if(typeof dStr === 'string') {
+                const parts = dStr.split ? dStr.split('/') : [dStr];
+                parts.forEach(p => {
+                    const cleanId = String(p).replace('1290-', '').trim();
+                    if(!cleanId) return;
+                    const parent = allKnownStagesMap[parseInt(cleanId)];
+                    if(parent) {
+                        if(parent.status !== 'Закрыт') waitingFor.push(parent.title);
+                    } else {
+                        waitingFor.push('Этап #' + cleanId);
+                    }
+                });
+            }
+        });
+        if(waitingFor.length > 0) return { type: 'WAIT', text: 'Ожидание', list: waitingFor };
+        return { type: 'WORK', text: 'В работе' };
+    }
+
+    function renderTree() {
+        const list = document.getElementById('treeList'); list.innerHTML = '';
+        
+        Object.keys(projectsCache).forEach(dId => {
+            const p = projectsCache[dId];
+            if (p.stages.length === 0) return;
+
+            // ФИЛЬТРАЦИЯ
+            // Мы должны показать сделку, если ХОТЯ БЫ ОДИН её этап проходит фильтр
+            let visibleStages = [];
+            p.stages.forEach(s => {
+                const type = s._displayStatus.type; // WORK, WAIT, CLOSED, ARCHIVE
+                if (filterState[type]) visibleStages.push(s);
+            });
+
+            if (visibleStages.length === 0) return; // Если все этапы скрыты фильтром - скрываем проект
+
+            const name = p.info.TITLE || 'Проект';
+            const addr = p.info[CONFIG.FIELD_OBJ_ADDR] || '-';
+            const div = document.createElement('div');
+            div.className = 'project-group'; div.dataset.search = (name+addr).toLowerCase();
+            div.innerHTML = `<div class="pg-header" onclick="toggleProject(this)"><div class="pg-info"><h4>${name}</h4><div class="pg-addr">${addr}</div></div><div class="pg-toggle"><i class="bi bi-plus"></i></div></div><div class="pg-stages"></div>`;
+            const stCont = div.querySelector('.pg-stages');
+            
+            visibleStages.forEach(s => {
+                const st = s._displayStatus;
+                let badgeHtml = '', extraHtml = '';
+                const deadline = formatDate(s[CONFIG.FIELD_STAGE_DEADLINE]);
+                if(st.type === 'CLOSED') badgeHtml = `<span class="st-badge st-closed"><i class="bi bi-check-circle"></i> Закрыт</span>`;
+                else if(st.type === 'ARCHIVE') badgeHtml = `<span class="st-badge st-archive"><i class="bi bi-archive-fill"></i> Архив</span>`;
+                else if(st.type === 'WORK') badgeHtml = `<span class="st-badge st-work"><i class="bi bi-play-circle-fill"></i> В работе</span>`;
+                else if(st.type === 'WAIT') { badgeHtml = `<span class="st-badge st-wait"><i class="bi bi-hourglass-split"></i> Ожидание</span>`; extraHtml = `<div class="deps-list"><div class="deps-title">Ждем выполнения:</div>${st.list.join(', ')}</div>`; }
+                const item = document.createElement('div'); item.className = 'stage-item';
+                item.innerHTML = `<div class="stage-header"><span class="stage-title">${s.title}</span></div><div class="stage-meta"><span class="stage-date">${deadline}</span>${badgeHtml}</div>${extraHtml}`;
+                item.onclick = () => openDetail(s, p.info, item);
+                stCont.appendChild(item);
+            });
+            list.appendChild(div);
+        });
+    }
+
+    function openDetail(stage, dealInfo, el) {
+        currentStage = stage; currentDealId = dealInfo.ID;
+        document.querySelectorAll('.stage-item').forEach(c => c.classList.remove('active'));
+        if(el) el.classList.add('active');
+        document.body.classList.add('mobile-detail-view');
+        document.getElementById('emptyState').classList.add('hidden');
+        document.getElementById('mainWorkContainer').classList.remove('hidden');
+        document.getElementById('headProjName').innerText = dealInfo[CONFIG.FIELD_OBJ_NAME] || dealInfo.TITLE;
+        document.getElementById('headProjAddr').innerText = dealInfo[CONFIG.FIELD_OBJ_ADDR] || '-';
+        document.getElementById('headStageTitle').innerText = stage.title;
+        window.currentStageProducts = stage._parsedProducts || [];
+        document.getElementById('headProducts').innerHTML = window.currentStageProducts.map(p=>`<span class="tag tag-blue">${p.name}</span>`).join('');
+        
+        // Загрузить товары и подзадачи
+        loadStageProducts(stage.id);
+        
+        loadYandexGeneric(dealInfo[CONFIG.FIELD_FOLDER_TZ], 'listTZ');
+        const btnTZ = document.getElementById('btnDlTZ');
+        if (dealInfo[CONFIG.FIELD_FOLDER_TZ]) {
+            btnTZ.classList.remove('hidden');
+            btnTZ.onclick = (e) => downloadFolder(dealInfo[CONFIG.FIELD_FOLDER_TZ]);
+        } else { btnTZ.classList.add('hidden'); }
+
+        loadYandexGeneric(dealInfo[CONFIG.FIELD_FOLDER_OTHER], 'listOther');
+        const btnOther = document.getElementById('btnOther');
+        if (dealInfo[CONFIG.FIELD_FOLDER_OTHER]) {
+            btnOther.classList.remove('hidden');
+            btnOther.onclick = (e) => downloadFolder(dealInfo[CONFIG.FIELD_FOLDER_OTHER]);
+        } else { btnOther.classList.add('hidden'); }
+        
+        initResultsExplorer(dealInfo.YANDEX_ROOT_PATH);
+        document.getElementById('historyList').innerHTML = '<div class="spinner"></div>';
+        loadHistory(stage.id);
+    }
+
+    function loadYandexGeneric(path, containerId) {
+        const c = document.getElementById(containerId); 
+        c.innerHTML = '<div class="spinner"></div>';
+        if(!path) { c.innerHTML='<span style="color:#999;font-size:12px">Пусто</span>'; return; }
+        if(appCache[path]) { renderYandexFiles(appCache[path], c, path); return; }
+        serverCall('getYandexList', { path: path }).then(items => { appCache[path] = items; renderYandexFiles(items, c, path); }).catch(()=>c.innerHTML='Ошибка');
+    }
+
+    function initResultsExplorer(path) { explorerState = { rootId: path, currentId: path, currentName: 'Результаты', history: [] }; renderExplorerUI(); loadYandexContent(path); }
+    
+    function loadYandexContent(path) { 
+        const c = document.getElementById('listResults'); 
+        c.innerHTML = '<div class="spinner"></div>'; 
+        const btnRes = document.getElementById('btnDlRes');
+        if (path) {
+            btnRes.classList.remove('hidden');
+            btnRes.onclick = (e) => downloadFolder(path);
+        } else { btnRes.classList.add('hidden'); }
+
+        if(appCache.yandex[path]) { renderYandexFiles(appCache.yandex[path], c, path); return; } 
+        serverCall('getYandexList', { path: path }).then(items => { const data = items || []; appCache.yandex[path] = data; renderYandexFiles(data, c, path); }).catch(()=>c.innerHTML='Ошибка Яндекса'); 
+    }
+
+    function renderYandexFiles(items, container, currentPath) {
+        container.innerHTML = '';
+        if(!items || !items.length) { 
+            if (currentPath === explorerState.rootId) container.innerHTML = '<span style="color:#999;font-size:12px">Нет загруженных файлов</span>';
+            else container.innerHTML = '<span style="color:#999;font-size:12px">Пусто</span>';
+            return; 
+        }
+        items.forEach(i => {
+            const isDir = i.TYPE === 'folder';
+            const div = document.createElement('div'); div.className = 'file-chip';
+            div.innerHTML = `<i class="bi ${isDir?'bi-folder-fill':'bi-file-earmark-text'}"></i> <span>${i.NAME}</span>`;
+            div.onclick = () => {
+                if(isDir) {
+                    if(container.id === 'listResults') { explorerState.history.push({ id: explorerState.currentId, name: explorerState.currentName }); explorerState.currentId = i.ID; explorerState.currentName = i.NAME; renderExplorerUI(); loadYandexContent(i.ID); } 
+                    else { if(i.URL) safeOpen(i.URL); }
+                } else { if(i.URL) safeOpen(i.URL); }
+            };
+            container.appendChild(div);
+        });
+    }
+    
+    function goUpResults() { 
+        if(!explorerState.history.length) return; 
+        const p = explorerState.history.pop(); 
+        explorerState.currentId = p.id; 
+        explorerState.currentName = p.name; 
+        renderExplorerUI(); 
+        loadYandexContent(p.id); 
+    }
+    
+    function renderExplorerUI() { const n = document.getElementById('resNav'); if(explorerState.history.length>0) { n.style.display='flex'; document.getElementById('resBreadcrumbs').innerText = explorerState.currentName; } else n.style.display='none'; }
+
+    function loadHistory(sid) { serverCall('getHistory', { stageId: sid }).then(items => { const div = document.getElementById('historyList'); div.innerHTML = ''; if(!items.length) { div.innerHTML='<div style="color:#999;text-align:center;font-size:12px;">Пусто</div>'; return; } items.forEach(i => { let badge = '<span class="tag tag-yellow">На проверке</span>'; if(i.stageId && i.stageId.includes('CLIENT')) badge = '<span class="tag tag-green">Принято</span>'; if(i.stageId && (i.stageId.includes('UC_X1NYJN') || i.stageId === CONFIG.STAGES.SENT_WITH_REMARKS)) badge = '<span class="tag tag-red">Доработка</span>'; const d = formatDate(i.createdTime); const r = document.createElement('div'); r.className='hist-item'; r.innerHTML = `<div class="hist-header"><div class="hist-title">${i.title}</div><div style="display:flex; align-items:center;"><span class="hist-ver">${i[CONFIG.RES_FIELDS.VERSION]||''}</span><div style="margin-left:8px;">${badge}</div></div></div><div class="hist-date">${d}</div>${i[CONFIG.RES_FIELDS.GIP_COMM] ? `<div class="hist-comm">ГИП: ${i[CONFIG.RES_FIELDS.GIP_COMM]}</div>` : ''}`; div.appendChild(r); }); }); }
+    function renderFinance(items) { const tb = document.getElementById('financeList'); tb.innerHTML=''; let p=0, w=0; const table = tb.closest('table'); if(table && !table.tHead) { const h = table.createTHead(); h.innerHTML='<tr><th>Назначение</th><th>Сумма</th><th>Статус</th></tr>'; } if(!items.length) tb.innerHTML='<tr><td colspan=3 style="text-align:center;color:#999;padding:20px">Нет данных</td></tr>'; else items.forEach(i=>{ const v = parseFloat(i.opportunity)||0; const paid = i.stageId&&i.stageId.includes('SUCCESS'); if(paid) p+=v; else w+=v; tb.innerHTML+=`<tr><td>${i.title}</td><td>${v.toLocaleString()} ₽</td><td>${paid?'<span class="tag tag-green">Оплачено</span>':'<span class="tag tag-yellow">В ожидании</span>'}</td></tr>`; }); document.getElementById('sumPaid').innerText = p.toLocaleString() + ' ₽'; document.getElementById('sumWait').innerText = w.toLocaleString() + ' ₽'; document.getElementById('financeHeaderStats').style.display='flex'; }
+    function loadTenders() { 
+        const cont = document.getElementById('tendersList');
+        cont.innerHTML = '<div class="spinner"></div>';
+        
+        serverCall('getTenders').then(items => { 
+            cont.innerHTML = ''; 
+            if(!items.length) { cont.innerHTML='<div style="text-align:center;color:#999;padding:40px;">Нет активных приглашений</div>'; return; }
+            
+            items.forEach(t => {
+                const isSent = t.status.includes('PREPARATION');
+                const btnText = isSent ? 'Обновить КП' : 'Отправить КП';
+                const statusBadge = isSent ? '<span class="tender-status sent">На рассмотрении</span>' : '<span class="tender-status active">Новый</span>';
+                
+                const div = document.createElement('div');
+                div.className = 'tender-card';
+                div.innerHTML = `
+                    <div class="tender-header">
+                        <div>
+                            <div class="tender-title">${t.workName}</div>
+                            <div class="tender-obj"><i class="bi bi-building"></i> ${t.objName} <span style="margin:0 8px;color:#ccc;">|</span> <i class="bi bi-geo-alt"></i> ${t.address}</div>
+                        </div>
+                        ${statusBadge}
+                    </div>
+                    
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <button class="btn btn-outline btn-sm" onclick="downloadFolder('${t.folderPath}')" ${!t.folderPath?'disabled':''}><i class="bi bi-folder2-open"></i> Скачать ИД</button>
+                        <div style="font-size:12px; color:#999;">Дата приглашения: ${new Date(t.date).toLocaleDateString()}</div>
+                    </div>
+
+                    <div class="tender-form">
+                        <div>
+                            <label style="font-size:11px; margin-bottom:4px; display:block;">Стоимость работ (Р)</label>
+                            <input type="number" id="price_${t.id}" class="search-input" placeholder="0" style="padding:8px;">
+                        </div>
+                        <div>
+                            <label style="font-size:11px; margin-bottom:4px; display:block;">Комментарий</label>
+                            <input type="text" id="comm_${t.id}" class="search-input" placeholder="Сроки, условия..." style="padding:8px;">
+                        </div>
+                        <button class="btn btn-primary" onclick="submitTender(${t.id})">${btnText}</button>
+                    </div>
+                `;
+                cont.appendChild(div);
+            }); 
+        }); 
+    }
+
+    async function submitTender(id) {
+        const price = document.getElementById('price_'+id).value;
+        const comm = document.getElementById('comm_'+id).value;
+        if(!price) { alert('Укажите цену'); return; }
+        
+        const btn = event.currentTarget;
+        btn.disabled = true; btn.innerText = 'Отправка...';
+        
+        try {
+            await serverCall('submitTenderResponse', { itemId: id, price: price, comment: comm });
+            showStatusModal('success', 'Отправлено', 'Ваше предложение передано ГИПу.');
+            loadTenders();
+        } catch(e) {
+            alert('Ошибка: ' + e.message);
+            btn.disabled = false;
+        }
+    }
+    function formatDate(s) { try{return s?new Date(s).toLocaleDateString():'-'}catch(e){return s} }
+    function fileToBase64(f) { return new Promise((r,j)=>{ const d=new FileReader(); d.readAsDataURL(f); d.onload=()=>r(d.result); d.onerror=j; }) }
+    function parseProducts(r) { if(!r)return[]; let e=[]; (Array.isArray(r)?r:[r]).forEach(i=>{if(typeof i==='string')e.push(...i.split('||').map(x=>x.trim()).filter(x=>x))}); return e.map(x=>({name:x.includes(':')&&!isNaN(parseInt(x.split(':')[0]))?x.split(':')[1].trim():x})); }
+
+    async function loadStageProducts(stageId) {
+        try {
+            const resp = await serverCall('getStageProducts', { stageId: stageId });
+            const container = document.getElementById('stageProductsContainer');
+            if(!resp || !resp.length) { 
+                document.getElementById('stageProductsBlock').style.display = 'none';
+                return; 
+            }
+            
+            document.getElementById('stageProductsBlock').style.display = 'block';
+            container.innerHTML = resp.map(prod => `
+                <div class="stage-product-card" data-product-id="${prod.id}">
+                    <div class="product-header" onclick="toggleProductExpand(this.closest('.stage-product-card'))">
+                        <div class="product-title">
+                            <span class="product-toggle">▸</span>
+                            <span>${prod.product_name || prod.title || 'Товар'}</span>
+                        </div>
+                        <span class="product-count">${prod.subtasks?.length || 0} подзадач</span>
+                    </div>
+                    <div class="product-deadlines">
+                        <div class="deadline-box">
+                            <div class="deadline-label">Де-Юре:</div>
+                            <div class="deadline-date">${formatDate(prod.deadline_jure)}</div>
+                        </div>
+                        <div class="deadline-box">
+                            <div class="deadline-label">Де-Факто:</div>
+                            <div class="deadline-date">${formatDate(prod.deadline_facto)}</div>
+                        </div>
+                    </div>
+                    <div class="subtasks-container">
+                        ${(prod.subtasks || []).map(st => {
+                            const statusClass = st.status === 'Готово' ? 'status-done' : st.status === 'Блокировано' ? 'blocked' : st.status === 'В работе' ? 'in-progress' : '';
+                            return `
+                                <div class="subtask-item" data-subtask-id="${st.id}">
+                                    <input type="checkbox" class="subtask-checkbox" ${st.status === 'Готово' ? 'checked' : ''} onchange="updateSubtaskStatus(${st.id}, this.checked)">
+                                    <div class="subtask-info">
+                                        <div class="subtask-title">${st.title || 'Подзадача'}</div>
+                                        <div class="subtask-meta">
+                                            <span class="subtask-type">${st.task_type || 'Задача'}</span>
+                                            <span class="subtask-status ${statusClass}">${st.status || 'Новая'}</span>
+                                            ${st.priority ? `<span>${st.priority}</span>` : ''}
+                                            ${st.due_date ? `<span>📅 ${formatDate(st.due_date)}</span>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `).join('');
+        } catch(e) {
+            console.error('loadStageProducts error:', e);
+            document.getElementById('stageProductsBlock').style.display = 'block';
+            document.getElementById('stageProductsContainer').innerHTML = '<p style="color:#cc0000">Ошибка загрузки товаров</p>';
+        }
+    }
+
+    function toggleProductExpand(el) {
+        el.classList.toggle('expanded');
+    }
+
+    async function updateSubtaskStatus(subtaskId, isChecked) {
+        try {
+            const newStatus = isChecked ? 'Готово' : 'Новая';
+            await serverCall('updateSubtaskStatus', { subtaskId: subtaskId, status: newStatus });
+            console.log(`Подзадача ${subtaskId} обновлена: ${newStatus}`);
+        } catch(e) {
+            console.error('updateSubtaskStatus error:', e);
+            alert('Ошибка обновления статуса');
+        }
+    }
+
+    window.switchMainTab = (id,b) => { backToMobileList(); ['works','tenders','finance','profile'].forEach(v=>document.getElementById('view-'+v).classList.add('hidden')); document.getElementById('view-'+id).classList.remove('hidden'); document.querySelectorAll('.tabs .tab').forEach(x=>x.classList.remove('active')); b.classList.add('active'); if(id === 'profile') loadProfileData(); };
+    window.toggleProject = h => { h.parentElement.classList.toggle('expanded'); h.querySelector('i').className=h.parentElement.classList.contains('expanded')?'bi bi-dash':'bi bi-plus'; };
+    window.filterProjects = () => { const v=document.getElementById('projectSearch').value.toLowerCase(); document.querySelectorAll('.project-group').forEach(e=>e.classList.toggle('hidden-by-filter',!e.dataset.search.includes(v))); };
+    window.backToMobileList = () => document.body.classList.remove('mobile-detail-view');
+    window.closeDrawer = () => document.getElementById('drawerUpload').style.display='none';
+    window.submitResult = submitResult;
+    window.goUpResults = goUpResults;
+    window.removeFile = removeFile; 
+    window.closeStatusModal = closeStatusModal; 
+    window.toggleFilter = toggleFilter;
+    window.toggleProductExpand = toggleProductExpand;
+    window.updateSubtaskStatus = updateSubtaskStatus;
+    window.loadStageProducts = loadStageProducts; 
+</script>
+</body>
+</html>

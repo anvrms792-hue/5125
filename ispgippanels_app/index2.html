@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель ГИПа</title>
+    <script src="//api.bitrix24.com/api/v1/"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* CSS стили (без изменений) */
+        :root { --primary: #4f46e5; --primary-light: #eef2ff; --primary-hover: #4338ca; --bg-body: #f3f4f6; --bg-surface: #ffffff; --border: #e5e7eb; --text-main: #1f2937; --text-muted: #6b7280; --radius: 16px; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; }
+        * { box-sizing: border-box; outline: none; }
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: var(--bg-body); color: var(--text-main); font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .top-bar { height: 64px; background: var(--bg-surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; flex-shrink: 0; z-index: 10; }
+        .app-title { font-size: 18px; font-weight: 600; color: var(--primary); display: flex; align-items: center; gap: 12px; }
+        .user-pill { background: var(--primary-light); color: var(--primary); padding: 6px 16px; border-radius: 20px; font-weight: 500; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .btn-mobile-back { display: none; padding: 8px; margin-right: 10px; background: #f3f4f6; border-radius: 8px; border: none; font-size: 16px; color: var(--text-main); cursor: pointer; }
+        .layout { display: flex; height: 100%; overflow: hidden; position: relative; }
+        .sidebar { width: 380px; background: var(--bg-surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; z-index: 5; }
+        .search-box { padding: 20px; background: #fff; border-bottom: 1px solid var(--border); }
+        .search-input { width: 100%; padding: 12px 12px 12px 40px; border: 1px solid var(--border); border-radius: 12px; font-size: 14px; background: var(--bg-body); transition: 0.2s; }
+        .search-input:focus { border-color: var(--primary); background: #fff; }
+        .search-wrap { position: relative; }
+        .search-wrap i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 16px; }
+        .deal-list { overflow-y: auto; flex: 1; padding: 16px; background: #f8fafc; }
+        .main { flex: 1; padding: 32px; overflow-y: auto; background: var(--bg-body); display: flex; flex-direction: column; }
+        .card { background: var(--bg-surface); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; border: 1px solid transparent; cursor: pointer; transition: all 0.2s ease; position: relative; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .card.active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+        .card.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--primary); }
+        .card-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; color: var(--text-main); line-height: 1.4; padding-right: 25px; }
+        .card-meta { display: flex; justify-content: space-between; align-items: center; }
+        .card-price { font-weight: 700; color: var(--success); font-size: 14px; }
+        .card-id { font-size: 11px; color: var(--text-muted); background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+        .card-badge { position: absolute; top: 16px; right: 16px; background: var(--warning); color: #fff; font-size: 11px; font-weight: 700; min-width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(245, 158, 11, 0.4); z-index: 2; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--border); flex-shrink: 0; overflow-x: auto; padding-bottom: 2px; }
+        .tab { padding: 12px 20px; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; color: var(--text-muted); white-space: nowrap; transition: 0.2s; }
+        .tab:hover { color: var(--primary); background: #f5f3ff; border-radius: 8px 8px 0 0; }
+        .tab.active { border-bottom-color: var(--primary); color: var(--primary); font-weight: 600; background: transparent; }
+        .counter { background: #fef3c7; color: #b45309; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 6px; font-weight: 700; }
+        .work-table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--bg-surface); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .work-table th { background: #f9fafb; padding: 16px; text-align: left; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); letter-spacing: 0.05em; white-space: nowrap; }
+        .work-table td { padding: 16px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+        .work-table tr:hover td { background: #f8fafc; }
+        .work-table tr:last-child td { border-bottom: none; }
+        .split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .file-zone { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; height: 100%; display: flex; flex-direction: column; }
+        .file-zone.full-width { grid-column: 1 / -1; }
+        .file-zone h4 { margin: 0 0 16px 0; font-size: 14px; color: var(--text-muted); text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .files-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; flex: 1; min-height: 80px; align-content: flex-start; }
+        .file-item { background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 12px; text-align: center; cursor: pointer; position: relative; height: 110px; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.2s; }
+        .file-item:hover { border-color: var(--primary); background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transform: translateY(-2px); }
+        .file-icon { font-size: 32px; color: var(--primary); margin-bottom: 8px; }
+        .file-icon.folder { color: var(--warning); }
+        .file-name { font-size: 11px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; width: 100%; line-height: 1.3; font-weight: 500; }
+        .btn-del-file { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 50%; background: var(--danger); color: white; display: none; align-items: center; justify-content: center; font-size: 14px; border: 2px solid #fff; cursor: pointer; z-index: 2; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn-del-file:hover { background: #b91c1c; }
+        .file-item:hover .btn-del-file { display: flex; }
+        .btn-icon-sm { background: transparent; border: 1px solid var(--border); color: var(--text-muted); border-radius: 6px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; margin-left: 8px; }
+        .btn-icon-sm:hover { color: var(--primary); border-color: var(--primary); background: var(--primary-light); }
+        .btn-icon-sm.hidden { display: none !important; }
+        .tag { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-block; margin-right: 4px; white-space: nowrap; }
+        .tag-sub { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .tag-tender { background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; }
+        .tag-gray { background: #f3f4f6; color: #4b5563; }
+        .tag-yellow { background: #fef3c7; color: #b45309; }
+        .tag-green { background: #d1fae5; color: #10b981; }
+        .tag-red { background: #fee2e2; color: #ef4444; }
+        .btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; background: var(--bg-body); color: var(--text-main); display: inline-flex; align-items: center; gap: 6px; transition: 0.2s; white-space: nowrap; }
+        .btn:hover { background: #e5e7eb; }
+        .btn-primary { background: var(--primary); color: white; box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-sm { padding: 4px 10px; font-size: 11px; }
+        .btn-outline { background: #fff; border: 1px solid var(--border); }
+        .btn-danger { background: var(--danger); color: white; }
+        .hidden { display: none !important; }
+        .spinner { animation: spin 1s infinite linear; font-size: 24px; color: var(--primary); margin: auto; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .filter-bar { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
+        select.filter-select { padding: 10px 36px 10px 16px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; min-width: 250px; background: #fff; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 14px center; background-size: 10px; }
+        
+        .type-switcher { display: flex; background: #f3f4f6; padding: 4px; border-radius: 12px; margin-bottom: 12px; }
+        .type-btn { flex: 1; text-align: center; padding: 8px; font-size: 12px; font-weight: 600; color: var(--text-muted); border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .type-btn.active { background: #fff; color: var(--primary); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+        .drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 100; display: none; }
+        .drawer { position: absolute; top:0; right:0; width: 600px; height:100%; background: var(--bg-surface); box-shadow: -10px 0 40px rgba(0,0,0,0.2); display: flex; flex-direction: column; animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        textarea { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; resize: vertical; font-family: inherit; }
+
+        /* STATUS MODAL */
+        .status-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 2000; display: none; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s; }
+        .status-modal { background: #fff; border-radius: 16px; padding: 32px; width: 320px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); transform: scale(0.9); transition: transform 0.3s; }
+        .status-modal-overlay.active { display: flex; opacity: 1; }
+        .status-modal-overlay.active .status-modal { transform: scale(1); }
+        .status-icon { font-size: 48px; margin-bottom: 16px; }
+        .status-icon.loading { color: var(--primary); animation: spin 1s infinite linear; }
+        .status-icon.success { color: var(--success); }
+        .status-icon.error { color: var(--danger); }
+        .status-title { font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 8px; }
+        .status-text { font-size: 14px; color: var(--text-muted); line-height: 1.5; margin-bottom: 24px; }
+        .status-btn { width: 100%; }
+        
+        /* ТОВАРЫ И ПОДЗАДАЧИ (ДЛЯ ПАНЕЛИ ГИПа) */
+        .gip-product-card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: #fff; transition: 0.2s; }
+        .gip-product-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.1); }
+        .product-header-gip { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; cursor: pointer; user-select: none; }
+        .product-title-gip { font-weight: 600; font-size: 14px; color: var(--text-main); display: flex; align-items: center; gap: 8px; flex: 1; }
+        .product-toggle-gip { color: var(--text-muted); font-size: 18px; transition: 0.2s; }
+        .gip-product-card.expanded .product-toggle-gip { transform: rotate(90deg); }
+        .product-deadlines-gip { display: flex; gap: 16px; margin-bottom: 12px; font-size: 12px; }
+        .deadline-box-gip { padding: 8px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid var(--border); flex: 1; }
+        .deadline-label-gip { font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+        .deadline-date-gip { font-size: 13px; font-weight: 700; color: var(--primary); }
+        .deadline-status-gip { font-size: 11px; color: #6b7280; margin-top: 2px; }
+        .subtasks-container-gip { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+        .gip-product-card.expanded .subtasks-container-gip { display: flex; flex-direction: column; gap: 8px; }
+        .subtask-item-gip { display: flex; align-items: center; gap: 10px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid var(--border); font-size: 12px; }
+        .subtask-checkbox-gip { width: 18px; height: 18px; cursor: pointer; flex-shrink: 0; }
+        .subtask-info-gip { flex: 1; min-width: 0; }
+        .subtask-title-gip { font-weight: 500; color: var(--text-main); margin-bottom: 2px; }
+        .subtask-meta-gip { display: flex; gap: 8px; font-size: 11px; color: var(--text-muted); flex-wrap: wrap; }
+        .subtask-type-gip { background: #eef2ff; color: #4f46e5; padding: 2px 6px; border-radius: 4px; font-weight: 500; }
+        .subtask-status-gip { background: #f0fdf4; color: #15803d; padding: 2px 6px; border-radius: 4px; font-weight: 500; }
+        .subtask-status-gip.blocked { background: #fef2f2; color: #991b1b; }
+        .subtask-status-gip.in-progress { background: #fffbeb; color: #b45309; }
+        .gip-edit-input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; width: 100%; }
+
+        @media (max-width: 768px) {
+            .app-title span { display: none; } 
+            .user-pill { padding: 4px 10px; font-size: 12px; }
+            .top-bar { padding: 0 16px; }
+            .layout { display: block; position: relative; width: 100%; height: calc(100vh - 64px); }
+            .sidebar { width: 100%; height: 100%; border-right: none; position: absolute; top: 0; left: 0; }
+            .main { width: 100%; height: 100%; display: none; position: absolute; top: 0; left: 0; padding: 16px; background: #fff; z-index: 20; }
+            body.mobile-detail-view .sidebar { display: none; }
+            body.mobile-detail-view .main { display: flex; }
+            body.mobile-detail-view .btn-mobile-back { display: inline-block; }
+            .split-grid { grid-template-columns: 1fr; gap: 16px; }
+            .file-zone { height: auto; }
+            .work-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .work-table th, .work-table td { white-space: nowrap; padding: 12px; }
+            .tabs { padding: 0 4px 8px 4px; }
+            .tab { padding: 10px 16px; font-size: 13px; }
+            .filter-bar { flex-direction: column; align-items: stretch; gap: 10px; }
+            select.filter-select { width: 100%; min-width: 0; }
+            .drawer { width: 100%; }
+        }
+    </style>
+</head>
+
+<body>
+    
+    <!-- STATUS MODAL -->
+    <div id="statusModal" class="status-modal-overlay">
+        <div class="status-modal">
+            <div id="modalIcon" class="status-icon loading"><i class="bi bi-arrow-repeat"></i></div>
+            <div id="modalTitle" class="status-title">Загрузка...</div>
+            <div id="modalText" class="status-text">Подождите...</div>
+            <button id="modalBtn" class="btn btn-primary status-btn" onclick="closeStatusModal()">Закрыть</button>
+        </div>
+    </div>
+
+    <div class="top-bar">
+        <div style="display:flex; align-items:center;">
+            <button class="btn-mobile-back" onclick="backToList()"><i class="bi bi-chevron-left"></i></button>
+            <div class="app-title"><i class="bi bi-grid-1x2-fill"></i> <span>Панель ГИПа</span></div>
+        </div>
+        <div class="user-pill"><i class="bi bi-person-circle"></i> <span id="userInfo">...</span></div>
+    </div>
+
+    <div class="layout">
+        <div class="sidebar">
+            <div class="search-box">
+                <!-- SWITCHER -->
+                <div class="type-switcher">
+                    <div class="type-btn active" id="btnTypeDeal" onclick="switchEntityType('deal')">Проекты</div>
+                    <div class="type-btn" id="btnTypeLead" onclick="switchEntityType('lead')">Лиды</div>
+                </div>
+                <div class="search-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="search-input" id="dealSearch" placeholder="Поиск..." oninput="filterDeals()">
+                </div>
+            </div>
+            <div id="dealList" class="deal-list"><div class="spinner"></div></div>
+        </div>
+        <div class="main" id="mainArea">
+            <div class="empty-state" style="margin:auto; text-align:center; opacity:0.6;">
+                <i class="bi bi-building-add" style="font-size:64px; color:#d1d5db; margin-bottom:20px; display:block;"></i>
+                <h3 style="margin:0;">Элемент не выбран</h3>
+            </div>
+        </div>
+    </div>
+
+    <template id="tplWorkArea">
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('general', this)">Общие данные</div>
+            <div class="tab" id="tab-head-stages" onclick="showTab('stages', this)">График работ</div>
+            <div class="tab" onclick="showTab('products', this)">Товары (Сверка)</div>
+            <div class="tab" onclick="showTab('tenders', this)">Тендеры</div>
+            <div class="tab" id="tab-head-reviews" onclick="showTab('reviews', this)">Приемка <span class="counter" id="badgeReviews" style="display:none">0</span></div>
+        </div>
+
+        <div id="tab-general" class="tab-content">
+            <div style="background:#f8fafc; padding:20px; border-radius:16px; border:1px solid var(--border); margin-bottom:24px;">
+                <div style="font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Объект</div>
+                <h3 id="infoName" style="margin:5px 0 10px 0;">-</h3>
+                <div style="font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Адрес</div>
+                <div id="infoAddress">-</div>
+            </div>
+
+            <div class="split-grid">
+                <div class="file-zone">
+                    <h4>
+                        <div style="display:flex;align-items:center;">
+                            <span><i class="bi bi-file-earmark-code"></i> ТЗ (ЗНП)</span>
+                            <button class="btn-icon-sm hidden" id="btnDlTZ" title="Скачать"><i class="bi bi-download"></i></button>
+                        </div>
+                        <div id="actionsTZ"><button class="btn btn-sm btn-outline" onclick="createFolder('TZ')" id="btnCreateTZ" style="display:none;">Создать</button><button class="btn btn-sm btn-primary" onclick="document.getElementById('inpFileTZ').click()" id="btnUploadTZ" style="display:none;"><i class="bi bi-cloud-upload"></i></button><input type="file" id="inpFileTZ" style="display:none;" onchange="uploadFile('TZ', this)"></div>
+                    </h4>
+                    <div id="listTZ" class="files-list"></div>
+                </div>
+                <div class="file-zone">
+                    <h4>
+                        <div style="display:flex;align-items:center;">
+                            <span><i class="bi bi-folder2-open"></i> Иные ИД</span>
+                            <button class="btn-icon-sm hidden" id="btnDlOTHER" title="Скачать"><i class="bi bi-download"></i></button>
+                        </div>
+                        <div id="actionsOTHER"><button class="btn btn-sm btn-outline" onclick="createFolder('OTHER')" id="btnCreateOTHER" style="display:none;">Создать</button><button class="btn btn-sm btn-primary" onclick="document.getElementById('inpFileOTHER').click()" id="btnUploadOTHER" style="display:none;"><i class="bi bi-cloud-upload"></i></button><input type="file" id="inpFileOTHER" style="display:none;" onchange="uploadFile('OTHER', this)"></div>
+                    </h4>
+                    <div id="listOTHER" class="files-list"></div>
+                </div>
+                <div class="file-zone full-width" id="blockResults" style="grid-column: 1 / -1;">
+                    <h4>
+                        <div style="display:flex; align-items:center; gap: 10px;">
+                            <span><i class="bi bi-briefcase-fill"></i> Результаты работ</span>
+                            <button class="btn-icon-sm hidden" id="btnDlRESULTS" title="Скачать"><i class="bi bi-download"></i></button>
+                            <div id="navResults" style="display:none; align-items:center;"><button class="btn btn-sm btn-outline" onclick="goUpResults()" style="padding:4px 8px; margin-right:8px;"><i class="bi bi-arrow-left"></i></button><span id="resBreadcrumbs" style="font-size:12px; font-weight:600; color:#666;"></span></div>
+                        </div>
+                        <div id="actionsRESULTS"><button class="btn btn-sm btn-outline" onclick="createFolder('RESULTS')" id="btnCreateRESULTS" style="display:none;">Создать папку</button><button class="btn btn-sm btn-outline" onclick="createSubFolder('RESULTS')" id="btnCreateSubRESULTS" style="display:none;"><i class="bi bi-folder-plus"></i></button><button class="btn btn-sm btn-primary" onclick="document.getElementById('inpFileRESULTS').click()" id="btnUploadRESULTS" style="display:none;"><i class="bi bi-cloud-upload"></i> Загрузить</button><input type="file" id="inpFileRESULTS" style="display:none;" onchange="uploadFile('RESULTS', this)"></div>
+                    </h4>
+                    <div id="listRESULTS" class="files-list"></div>
+                </div>
+            </div>
+        </div>
+        <div id="tab-stages" class="tab-content hidden"><div class="filter-bar"><select id="filterSubStages" class="filter-select" onchange="renderStages()"><option value="all">Все исполнители</option></select><div style="flex:1"></div></div><table class="work-table"><thead><tr><th>Этап</th><th>Исполнитель</th><th>Состав работ</th><th>Срок</th><th>Статус</th></tr></thead><tbody id="stagesList"></tbody></table></div>
+        <div id="tab-products" class="tab-content hidden">
+            <div class="filter-bar">
+                <select id="filterSubProducts" class="filter-select" onchange="filterProductsByStage()">
+                    <option value="all">Все этапы</option>
+                </select>
+            </div>
+            <div id="productsContainer" style="display:flex; flex-direction:column; gap:16px;">
+                <div class="spinner"></div>
+            </div>
+        </div>
+        
+        <!-- TENDERS TAB -->
+        <div id="tab-tenders" class="tab-content hidden">
+            <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+                <h3>Активные тендеры</h3>
+                <button class="btn btn-primary" onclick="createTenderSmart()">+ Создать тендер</button>
+            </div>
+            <table class="work-table">
+                <thead><tr><th>Исполнитель</th><th>Предложение</th><th>Комментарий</th><th>Статус</th></tr></thead>
+                <tbody id="tendersTable"></tbody>
+            </table>
+        </div>
+
+        <div id="tab-reviews" class="tab-content hidden"><div class="filter-bar"><select id="filterReviewStatus" class="filter-select" onchange="renderReviews()"><option value="PREP">На проверке</option><option value="REWORK">На доработке</option><option value="APPROVED">Принятые</option><option value="ALL">Показать все</option></select><div style="flex:1"></div><div style="color:var(--text-muted); font-size:12px;">Всего: <span id="reviewTotalCount">0</span></div></div><table class="work-table"><thead><tr><th>Результат</th><th>Автор</th><th>Компания</th><th>Статус</th><th>Действие</th></tr></thead><tbody id="reviewsList"></tbody></table></div>
+    </template>
+
+    <div id="drawerReview" class="drawer-overlay">
+        <div class="drawer">
+            <div style="padding:24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0">Проверка результата</h3>
+                <button onclick="closeDrawer()" style="border:none; background:none; font-size:24px; cursor:pointer;">&times;</button>
+            </div>
+            <div style="padding:24px; flex:1; overflow-y:auto; background:#f9fafb;">
+                <div style="background:#fff; border-radius:12px; padding:20px; border:1px solid var(--border); margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <div>
+                            <div style="font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Позиция</div>
+                            <div id="revProduct" style="font-size:16px; font-weight:600; margin-bottom:10px;"></div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Автор</div>
+                            <div id="revAuthor" style="font-weight:600;">-</div>
+                        </div>
+                    </div>
+                    <div style="font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Исполнитель</div>
+                    <div id="revSubName">-</div>
+                </div>
+                <label style="font-weight:600; display:block; margin-bottom:8px;">Комментарий</label>
+                <div id="revComment" style="padding:15px; background:#fff; border-radius:8px; border:1px solid var(--border); margin-bottom:20px;"></div>
+                <label style="font-weight:600; display:block; margin-bottom:8px;">Файлы (Вложения)</label>
+                <div id="revFiles" style="margin-bottom:20px;"></div>
+                <label style="font-weight:600; display:block; margin-bottom:8px;">Решение ГИПа</label>
+                <textarea id="revGipComment" style="min-height:100px;" placeholder="Ваш комментарий..."></textarea>
+            </div>
+            <div id="drawerFooter" style="padding:24px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:10px;">
+                <button class="btn btn-danger" onclick="submitReview('REWORK')">Вернуть</button>
+                <button class="btn" style="background:#fff7ed; color:#c2410c; border:1px solid #fdba74;" onclick="submitReview('SENT_WITH_REMARKS')">Отправить (с замеч.)</button>
+                <button class="btn btn-primary" onclick="submitReview('APPROVED')">Принять</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const API_URL = 'https://for-apps.ru/ispgippanels_app/api.php'; 
+
+    const CONFIG = {
+        SP_STAGES: 1290, SP_RESULTS: 1334, SP_TENDERS: 1300, SP_SUB: 1266,
+        FIELD_OBJ_NAME: 'UF_CRM_1761037276', FIELD_OBJ_ADDR: 'UF_CRM_1761037367',
+        FIELD_FOLDER_TZ: 'UF_CRM_1764865114', 
+        FIELD_FOLDER_OTHER: 'UF_CRM_1764867444', 
+        FIELD_FOLDER_RESULTS: 'UF_CRM_1764928487', 
+        FIELD_LEAD_OBJ_NAME: 'UF_CRM_1735933101096', FIELD_LEAD_OBJ_ADDR: 'UF_CRM_1735933109497',
+        FIELD_LEAD_FOLDER_TZ: 'UF_CRM_1765471675', FIELD_LEAD_FOLDER_OTHER: 'UF_CRM_1765471699',
+
+        FIELD_LINK_DEAL: 'ufCrm86_1763852237', FIELD_STAGE_PRODS: 'ufCrm86_1763845210', FIELD_STAGE_DATE: 'ufCrm86_1763847030', FIELD_STAGE_SUB_ID: 'parentId2', FIELD_STAGE_STATUS: 'stageId',
+        RES_LINK_STAGE: 'ufCrm106_1764863399', RES_LINK_SUB: 'ufCrm106_1764863420', RES_FILES: 'ufCrm106_1764863387', RES_PRODUCT: 'ufCrm106_1764863344', RES_COMM_SUB: 'ufCrm106_1764863374', RES_COMM_GIP: 'ufCrm106_1764863382',
+        RES_FOLDER_PATH: 'ufCrm106_1765058469',
+        RES_FIELDS: {
+            GIP_COMM: 'ufCrm106_1764863382',
+            PRODUCT: 'ufCrm106_1764863344',
+            VERSION: 'ufCrm106_1764931105'
+        },
+        TENDER_DEAL: 'parentId2',
+        TEND_FIELDS: {
+            EXECUTOR: 'ufCrm90_1763033396',
+            SUM: 'ufCrm90_1763033407',
+            COMMENT: 'ufCrm90_1763033426',
+            WORK: 'ufCrm90_1763033438'
+        },
+        STAGES: { 
+            PREP: 'DT1334_130:PREPARATION', 
+            APPROVED: 'DT1334_130:CLIENT', 
+            REWORK: 'DT1334_130:UC_X1NYJN', 
+            SENT_WITH_REMARKS: 'DT1334_130:UC_FXXJ17', 
+            STAGE_CLOSED_SEMANTIC: 'SUCCESS' 
+        }
+    };
+
+    const ALLOWED_USER_IDS = [1, 106, 108, 110];
+    let allDeals = [], allLeads = [], currentDeal = null, dealProducts = [], stageMap = [], subNameMap = {}, subRealCompanyMap = {}, contractProductsMap = {}, tenderProductsMap = {}, currentReviewId = 0, allReviewItems = [], usersMap = {};         
+    let explorerState = { rootId: null, currentId: null, currentName: '', history: [] };
+    let appCache = { TZ: null, OTHER: null, RESULTS: {} };
+    let globalReviewCounts = {};
+    let currentEntityType = 'deal';
+
+    function safeOpen(url) {
+        if(!url) return;
+        const isMobileApp = navigator.userAgent.includes('Bitrix24') && (navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('Android'));
+        if (isMobileApp && typeof BX24 !== 'undefined' && BX24.openPath) { BX24.openPath(url); } 
+        else { const link = document.createElement('a'); link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.download = ''; document.body.appendChild(link); link.click(); document.body.removeChild(link); }
+    }
+
+    function showStatusModal(state, title, message) {
+        const modal = document.getElementById('statusModal'); const icon = document.getElementById('modalIcon'); const titleEl = document.getElementById('modalTitle'); const textEl = document.getElementById('modalText'); const btn = document.getElementById('modalBtn');
+        modal.classList.add('active'); titleEl.innerText = title; textEl.innerText = message; icon.className = 'status-icon';
+        if (state === 'loading') { icon.classList.add('loading'); icon.innerHTML = '<i class="bi bi-arrow-repeat"></i>'; btn.style.display = 'none'; } 
+        else if (state === 'success') { icon.classList.add('success'); icon.innerHTML = '<i class="bi bi-check-circle-fill"></i>'; btn.style.display = 'block'; } 
+        else if (state === 'error') { icon.classList.add('error'); icon.innerHTML = '<i class="bi bi-exclamation-circle-fill"></i>'; btn.style.display = 'block'; }
+    }
+    function closeStatusModal() { document.getElementById('statusModal').classList.remove('active'); }
+
+    async function serverCall(action, params = {}) {
+        try {
+            const response = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, userId: 1, ...params }) });
+            const data = await response.json();
+            if(data.error) throw new Error(data.error);
+            return data;
+        } catch (e) { console.error("API Error:", e); showStatusModal('error', 'Ошибка API', e.message); throw e; }
+    }
+
+    BX24.init(async () => {
+        const currentUser = await new Promise(r => BX24.callMethod('user.current', {}, res => r(res.data())));
+        const userId = Number(currentUser.ID);
+        const position = (currentUser.WORK_POSITION || '').toLowerCase();
+        if (!ALLOWED_USER_IDS.includes(userId) && !position.includes('гип')) { document.body.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:100vh;color:#4b5563;"><h2>Доступ закрыт</h2></div>`; return; }
+        document.getElementById('userInfo').innerText = `${currentUser.NAME} ${currentUser.LAST_NAME}`;
+        loadEntities();
+    });
+
+    window.switchEntityType = (type) => {
+        currentEntityType = type;
+        document.getElementById('btnTypeDeal').classList.toggle('active', type==='deal');
+        document.getElementById('btnTypeLead').classList.toggle('active', type==='lead');
+        loadEntities();
+    };
+
+    function loadEntities() {
+        const list = document.getElementById('dealList'); list.innerHTML = '<div class="spinner"></div>';
+        if (currentEntityType === 'deal') {
+            BX24.callMethod('crm.deal.list', { order: { ID: 'DESC' }, filter: { CLOSED: 'N' }, select: ['ID', 'TITLE', 'OPPORTUNITY', 'CURRENCY_ID', CONFIG.FIELD_OBJ_NAME, CONFIG.FIELD_OBJ_ADDR, CONFIG.FIELD_FOLDER_TZ, CONFIG.FIELD_FOLDER_OTHER, CONFIG.FIELD_FOLDER_RESULTS] }, res => { 
+                allDeals = res.data().filter(deal => deal[CONFIG.FIELD_OBJ_NAME]); 
+                renderList(allDeals); loadGlobalCounters(allDeals); 
+            });
+        } else {
+            serverCall('getLeadsForGIP').then(res => { allLeads = res; renderList(allLeads); });
+        }
+    }
+    
+    function renderList(items) { 
+        const list = document.getElementById('dealList'); list.innerHTML = ''; 
+        if(!items.length) { list.innerHTML = '<div style="text-align:center; padding:20px; color:#999;">Нет данных</div>'; return; } 
+        items.forEach(d => { 
+            const el = document.createElement('div'); el.className = 'card'; el.dataset.id = d.ID; 
+            if(currentDeal && d.ID == currentDeal.ID) el.classList.add('active'); 
+            const title = currentEntityType === 'deal' ? d.TITLE : (d[CONFIG.FIELD_LEAD_OBJ_NAME] || d.TITLE);
+            const count = (currentEntityType === 'deal' && globalReviewCounts[d.ID]) || 0;
+            const badgeStyle = count > 0 ? 'display:flex;' : 'display:none;';
+            el.innerHTML = `<div class="card-badge" id="badge-deal-${d.ID}" style="${badgeStyle}">${count}</div><div class="card-title">${title}</div><div class="card-meta"><span class="card-id">#${d.ID}</span><span class="card-price">${Math.round(d.OPPORTUNITY||0).toLocaleString()} ₽</span></div>`; 
+            el.onclick = () => selectEntity(d); 
+            list.appendChild(el); 
+        }); 
+    }
+    
+    function selectEntity(d) { 
+        currentDeal = d; 
+        document.body.classList.add('mobile-detail-view'); 
+        renderList(currentEntityType==='deal' ? allDeals : allLeads); 
+        const area = document.getElementById('mainArea'); area.innerHTML = ''; 
+        area.appendChild(document.getElementById('tplWorkArea').content.cloneNode(true)); 
+
+        let name, addr;
+        if (currentEntityType === 'deal') {
+            name = d[CONFIG.FIELD_OBJ_NAME] || '-'; addr = d[CONFIG.FIELD_OBJ_ADDR] || '-';
+        } else {
+            name = d[CONFIG.FIELD_LEAD_OBJ_NAME] || '-'; addr = d[CONFIG.FIELD_LEAD_OBJ_ADDR] || '-';
+            // Скрываем лишние вкладки для Лидов (И восстанавливаем их для Сделок)
+            document.getElementById('tab-head-stages').style.display = 'none';
+            document.getElementById('tab-head-reviews').style.display = 'none';
+            document.getElementById('blockResults').style.display = 'none';
+        }
+
+        // Если это сделка - возвращаем вкладки (фикс бага)
+        if (currentEntityType === 'deal') {
+            document.getElementById('tab-head-stages').style.display = 'block';
+            document.getElementById('tab-head-reviews').style.display = 'block';
+            document.getElementById('blockResults').style.display = 'flex';
+        }
+
+        document.getElementById('infoName').innerText = name; document.getElementById('infoAddress').innerText = addr; 
+        
+        appCache = { TZ: null, OTHER: null, RESULTS: {} }; 
+        explorerState = { rootId: null, currentId: null, currentName: '', history: [] }; 
+        
+        if (currentEntityType === 'deal') { loadFiles('TZ'); loadFiles('OTHER'); initResultsExplorer(); loadSubcontractorChain(); } 
+        else { loadFiles('LEAD_TZ'); loadFiles('LEAD_OTHER'); }
+        
+        loadDealProducts(); loadTenders(); 
+    }
+
+    function backToList() { document.body.classList.remove('mobile-detail-view'); }
+    function filterDeals() { const v = document.getElementById('dealSearch').value.toLowerCase(); const src = currentEntityType==='deal' ? allDeals : allLeads; renderList(src.filter(d => (d.TITLE && d.TITLE.toLowerCase().includes(v)))); }
+    window.showTab = function(id, btn) { document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden')); document.getElementById('tab-'+id).classList.remove('hidden'); document.querySelectorAll('.tab').forEach(b => b.classList.remove('active')); btn.classList.add('active'); if(id==='products') { if(currentEntityType==='deal') loadStageProductsGip(); else renderProducts(); } if(id==='stages' && currentEntityType==='deal') renderStages(); if(id==='reviews' && currentEntityType==='deal') renderReviews(); if(id==='tenders') loadTenders(); }
+
+    function loadFiles(typeKey) { 
+        let fieldCode;
+        if (typeKey === 'LEAD_TZ') fieldCode = CONFIG.FIELD_LEAD_FOLDER_TZ;
+        else if (typeKey === 'LEAD_OTHER') fieldCode = CONFIG.FIELD_LEAD_FOLDER_OTHER;
+        else fieldCode = CONFIG['FIELD_FOLDER_' + typeKey];
+        const path = currentDeal[fieldCode];
+        let domId = typeKey.replace('LEAD_', '');
+        const cont = document.getElementById('list' + domId); const btnU = document.getElementById('btnUpload' + domId); const btnC = document.getElementById('btnCreate' + domId); const btnDl = document.getElementById('btnDl' + domId);
+        if(!cont) return;
+        cont.innerHTML = '<div class="spinner"></div>'; 
+        if(!path || path.length < 2) { 
+            if(btnU) btnU.style.display='none'; 
+            if(btnC) { btnC.style.display='inline-flex'; btnC.onclick = () => createFolder(typeKey); }
+            if(btnDl) btnDl.classList.add('hidden'); 
+            cont.innerHTML='<span style="color:#999;font-size:12px;">Нет папки</span>'; return; 
+        } 
+        if(btnU) { btnU.style.display='inline-flex'; const inp = document.getElementById('inpFile' + domId); if(inp) inp.onchange = function() { uploadFile(typeKey, this); }; }
+        if(btnC) btnC.style.display='none'; 
+        if(btnDl) { btnDl.classList.remove('hidden'); btnDl.onclick = () => downloadFolder(path); }
+        if(appCache[typeKey]) { renderYandexItems(appCache[typeKey], cont, typeKey); return; } 
+        serverCall('getYandexList', { path: path }).then(items => { appCache[typeKey] = items; renderYandexItems(items, cont, typeKey); }).catch(()=> { cont.innerHTML='Ошибка загрузки'; }); 
+    }
+    
+    function initResultsExplorer() { explorerState.rootId = currentDeal[CONFIG.FIELD_FOLDER_RESULTS]; explorerState.currentId = explorerState.rootId; explorerState.history = []; renderResultsUI(); if(explorerState.rootId) loadResultsContent(explorerState.rootId); }
+    function renderResultsUI() { const has = !!explorerState.rootId; const btnC = document.getElementById('btnCreateRESULTS'); if(btnC) btnC.style.display = has ? 'none' : 'inline-flex'; const btnU = document.getElementById('btnUploadRESULTS'); if(btnU) btnU.style.display = has ? 'inline-flex' : 'none'; const btnS = document.getElementById('btnCreateSubRESULTS'); if(btnS) btnS.style.display = has ? 'inline-flex' : 'none'; const nav = document.getElementById('navResults'); const bc = document.getElementById('resBreadcrumbs'); const list = document.getElementById('listRESULTS'); const btnDl = document.getElementById('btnDlRESULTS'); if (!has) { if(list) list.innerHTML = '<div style="color:#999;font-size:12px;padding:10px;">Папка не создана</div>'; if(nav) nav.style.display = 'none'; if(btnDl) btnDl.classList.add('hidden'); return; } if (explorerState.history.length > 0) { if(nav) nav.style.display = 'flex'; if(bc) bc.innerText = explorerState.currentName; } else { if(nav) nav.style.display = 'none'; } if(btnDl) { btnDl.classList.remove('hidden'); btnDl.onclick = () => downloadFolder(explorerState.currentId); } }
+    function loadResultsContent(path) { const c = document.getElementById('listRESULTS'); c.innerHTML = '<div class="spinner"></div>'; if(appCache.RESULTS[path]) { renderYandexItems(appCache.RESULTS[path], c, 'RESULTS'); return; } serverCall('getYandexList', { path: path }).then(items => { appCache.RESULTS[path] = items; renderYandexItems(items, c, 'RESULTS'); }).catch(()=>c.innerHTML='Ошибка загрузки'); }
+    function renderYandexItems(items, container, type) { container.innerHTML = ''; if(!items || !items.length) { container.innerHTML='<span style="font-size:12px; color:#999; margin:auto;">Пусто</span>'; return; } items.forEach(f => { const div = document.createElement('div'); div.className='file-item'; const isDir = f.TYPE==='folder'; div.innerHTML = `<i class="bi ${isDir?'bi-folder-fill folder':'bi-file-earmark-text text-primary'} file-icon"></i><div class="file-name">${f.NAME}</div><div class="btn-del-file" title="Удалить" onclick="event.stopPropagation(); deleteResource('${f.ID}', '${type}', '${f.NAME}')"><i class="bi bi-x"></i></div>`; div.onclick = () => { if(isDir) { if(type === 'RESULTS') { explorerState.history.push({id:explorerState.currentId, name:explorerState.currentName}); explorerState.currentId = f.ID; explorerState.currentName = f.NAME; renderResultsUI(); loadResultsContent(f.ID); } else { safeOpen(f.URL); } } else { if(f.URL) safeOpen(f.URL); } }; container.appendChild(div); }); }
+    async function deleteResource(path, type, name) { if (type === 'RESULTS' && checkDeleteGuard(name)) { showStatusModal('error', 'Удаление запрещено', `По работе "${name}" (или внутри) есть результат на проверке.`); return; } if(!confirm(`Удалить "${name}"? Это действие необратимо.`)) return; showStatusModal('loading', 'Удаление...', 'Удаляем объект с Яндекс.Диска'); try { const res = await serverCall('deleteYandexResource', { path: path }); if(res.success) { if(type === 'RESULTS') { delete appCache.RESULTS[explorerState.currentId]; loadResultsContent(explorerState.currentId); } else { appCache[type] = null; loadFiles(type); } closeStatusModal(); } else { throw new Error(res.error || 'Ошибка удаления'); } } catch(e) { showStatusModal('error', 'Ошибка', e.message); } }
+    function checkDeleteGuard(name) { if (!allReviewItems || !allReviewItems.length) return false; return allReviewItems.some(i => { if (i.stageId !== CONFIG.STAGES.PREP) return false; return (i[CONFIG.RES_PRODUCT] && i[CONFIG.RES_PRODUCT].includes(name)) || (i[CONFIG.RES_VERSION] && i[CONFIG.RES_VERSION].includes(name)); }); }
+    async function downloadFolder(path) { if (!path) return; const btn = event.currentTarget; const originalIcon = btn.innerHTML; btn.innerHTML = '<div class="spinner" style="font-size:14px; width:14px; height:14px;"></div>'; btn.disabled = true; try { const res = await serverCall('downloadFolderLink', { path: path }); if (res.success && res.url) { window.open(res.url, '_blank'); } else { alert('Ошибка: ' + (res.error || 'Не удалось получить ссылку')); } } catch (e) { console.error(e); alert('Ошибка сети'); } finally { btn.innerHTML = originalIcon; btn.disabled = false; } }
+    function goUpResults() { if(!explorerState.history.length) return; const p = explorerState.history.pop(); explorerState.currentId = p.id; explorerState.currentName = p.name; renderResultsUI(); loadResultsContent(p.id); }
+    async function createFolder(typeKey) { let fieldCode; if (typeKey === 'LEAD_TZ') fieldCode = CONFIG.FIELD_LEAD_FOLDER_TZ; else if (typeKey === 'LEAD_OTHER') fieldCode = CONFIG.FIELD_LEAD_FOLDER_OTHER; else fieldCode = CONFIG['FIELD_FOLDER_' + typeKey]; const suffix = typeKey.includes('TZ') ? '(ТЗ)' : (typeKey.includes('OTHER') ? '(ИД)' : '(Результаты)'); const nameField = currentEntityType === 'lead' ? CONFIG.FIELD_LEAD_OBJ_NAME : CONFIG.FIELD_OBJ_NAME; const folderName = (currentDeal[nameField] || currentDeal.TITLE) + ' ' + suffix; if(!confirm(`Создать папку "${folderName}"?`)) return; const res = await serverCall('createYandexRoot', { dealId: currentDeal.ID, name: folderName, fieldCode: fieldCode, entityType: currentEntityType }); if(res.success) { currentDeal[fieldCode] = res.path; if(typeKey === 'RESULTS') initResultsExplorer(); else loadFiles(typeKey); } else alert('Ошибка: ' + res.error); }
+    async function createSubFolder(type) { const parent = type==='RESULTS' ? explorerState.currentId : currentDeal[CONFIG['FIELD_FOLDER_'+type]]; const name = prompt('Имя папки'); if(!name) return; const res = await serverCall('createYandexFolder', { path: parent, name: name }); if(res.success) { if(type==='RESULTS') { delete appCache.RESULTS[parent]; loadResultsContent(parent); } else { appCache[type] = null; loadFiles(type); } } else alert('Ошибка'); }
+    async function uploadFile(typeKey, inp) { if(!inp.files.length) return; const file = inp.files[0]; let path; if(typeKey === 'RESULTS') path = explorerState.currentId; else { let fieldCode; if (typeKey === 'LEAD_TZ') fieldCode = CONFIG.FIELD_LEAD_FOLDER_TZ; else if (typeKey === 'LEAD_OTHER') fieldCode = CONFIG.FIELD_LEAD_FOLDER_OTHER; else fieldCode = CONFIG['FIELD_FOLDER_' + typeKey]; path = currentDeal[fieldCode]; } showStatusModal('loading', 'Загрузка...', 'Отправляем файл на сервер...'); try { const b64 = await new Promise((r) => { const reader = new FileReader(); reader.onload = e => r(e.target.result); reader.readAsDataURL(file); }); const res = await serverCall('uploadSimple', { path: path, fileName: file.name, fileContent: b64.split(',')[1] }); if(res.success) { if(typeKey==='RESULTS') { delete appCache.RESULTS[path]; loadResultsContent(path); } else { appCache[typeKey] = null; loadFiles(typeKey); } closeStatusModal(); } } catch(e) { showStatusModal('error', 'Ошибка', e.message); } finally { inp.value = ''; } }
+
+    function createTenderSmart(name, price, id) {
+        let prodName, prodId, prodPrice;
+        if (name && id) { prodName = name; prodPrice = price; prodId = id; } 
+        else {
+            if (!dealProducts.length) { alert('В сделке нет товаров'); return; }
+            let prodList = dealProducts.map((p,i) => `${i+1}. ${p.PRODUCT_NAME}`).join('\n');
+            let choice = prompt(`Введите номер товара для тендера:\n${prodList}`);
+            if (!choice) return;
+            const prod = dealProducts[parseInt(choice)-1];
+            if (!prod) return;
+            prodName = prod.PRODUCT_NAME; prodId = prod.PRODUCT_ID; prodPrice = prod.PRICE;
+        }
+
+        if(!confirm(`Создать тендер на "${prodName}"?`)) return;
+        showStatusModal('loading', 'Создание...', 'Ищем исполнителей...');
+        const objName = currentEntityType === 'deal' ? (currentDeal[CONFIG.FIELD_OBJ_NAME] || currentDeal.TITLE) : (currentDeal[CONFIG.FIELD_LEAD_OBJ_NAME] || currentDeal.TITLE);
+
+        serverCall('createTenderSmart', { dealId: currentDeal.ID, entityType: currentEntityType, productName: prodName, productId: prodId, budget: prodPrice, objName: objName }).then(res => {
+            if (res.success) { showStatusModal('success', 'Готово', `Тендер создан. Приглашено: ${res.count}`); loadTenders(); renderProducts(); } 
+            else { showStatusModal('error', 'Ошибка', res.error || 'Не удалось создать'); }
+        }).catch(e => showStatusModal('error', 'Ошибка', e.message));
+    }
+
+    function loadTenders() {
+        const cont = document.getElementById('tendersTable'); cont.innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner"></div></td></tr>';
+        serverCall('getTendersForGIP', { dealId: currentDeal.ID, entityType: currentEntityType }).then(items => {
+            cont.innerHTML = '';
+            tenderProductsMap = {};
+            if (items.length > 0) {
+                const groups = {};
+                items.forEach(i => { 
+                    const name = i[CONFIG.TEND_FIELDS.WORK] || 'Без названия';
+                    // Заполняем карту
+                    if (!i.stageId.includes('SUCCESS') && !i.stageId.includes('FAIL')) tenderProductsMap[name] = { id: i.id, opportunity: 0 };
+                    if (i.stageId.includes('SUCCESS')) tenderProductsMap[name] = { id: i.id, status: 'WINNER' };
+                    
+                    if (!groups[name]) groups[name] = []; groups[name].push(i); 
+                });
+                Object.keys(groups).forEach(name => {
+                    const groupItems = groups[name];
+                    cont.innerHTML += `<tr style="background:#f1f5f9;"><td colspan="4"><b>${name}</b> <span style="font-size:11px;color:#666;">(${groupItems.length} участн.)</span></td></tr>`;
+                    groupItems.forEach(t => {
+                        const executor = t[CONFIG.TEND_FIELDS.EXECUTOR] || 'Неизвестно';
+                        const sum = t[CONFIG.TEND_FIELDS.SUM] ? Math.round(t[CONFIG.TEND_FIELDS.SUM]).toLocaleString() + ' ₽' : '-';
+                        const comm = t[CONFIG.TEND_FIELDS.COMMENT] || '-';
+                        const status = t.stageId.includes('PREP') ? '<span class="tag tag-yellow">Ответил</span>' : (t.stageId.includes('SUCCESS') ? '<span class="tag tag-green">Выбран</span>' : (t.stageId.includes('FAIL') ? '<span class="tag tag-red">Отказ</span>' : '<span class="tag tag-gray">Ждем</span>'));
+                        let btn = ''; if (!t.stageId.includes('SUCCESS') && !t.stageId.includes('FAIL') && t.stageId.includes('PREP')) btn = `<button class="btn-primary btn-sm" onclick="chooseWinner(${t.id})">Выбрать</button>`;
+                        cont.innerHTML += `<tr><td style="padding-left:20px;">${executor}</td><td><b>${sum}</b></td><td style="font-size:11px; color:#666;">${comm}</td><td>${status} ${btn}</td></tr>`;
+                    });
+                });
+            } else { cont.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">Нет тендеров</td></tr>'; }
+            renderProducts();
+        });
+    }
+
+    function chooseWinner(id) {
+        if (!confirm('Выбрать этого исполнителя? Остальные заявки по этой работе будут отклонены.')) return;
+        serverCall('selectTenderWinner', { itemId: id }).then(() => { alert('Исполнитель выбран!'); loadTenders(); });
+    }
+
+    function loadReviews(subIds) { if(!subIds || !subIds.length) { updateReviewBadge(0); return; } BX24.callMethod('crm.item.list', {entityTypeId:CONFIG.SP_RESULTS, filter:{['@'+'ufCrm106_1764863420']:subIds}, order:{id:'DESC'}}, async r=>{ allReviewItems = r.data().items; const uIds = new Set(); allReviewItems.forEach(i=>i.createdBy && uIds.add(i.createdBy)); if(uIds.size) await new Promise(ok=>BX24.callMethod('user.get', {FILTER:{ID:Array.from(uIds)}}, res=>{res.data().forEach(u=>usersMap[u.ID]=`${u.NAME} ${u.LAST_NAME}`); ok();})); renderReviews(); }); }
+    function renderReviews() { const t = document.getElementById('reviewsList'); if(!t) return; t.innerHTML=''; const filter = document.getElementById('filterReviewStatus').value; const list = allReviewItems.filter(i => filter==='ALL' || i.stageId===CONFIG.STAGES[filter]); document.getElementById('reviewTotalCount').innerText = list.length; updateReviewBadge(allReviewItems.filter(i => i.stageId === CONFIG.STAGES.PREP).length); if(!list.length) { t.innerHTML = '<tr><td colspan="5" style="text-align:center;">Пусто</td></tr>'; return; } list.forEach(i => { const author = usersMap[i.createdBy] || i.createdBy; let st = '<span class="tag tag-gray">?</span>', btn = ''; if(i.stageId===CONFIG.STAGES.PREP) { st='<span class="tag tag-yellow">На проверке</span>'; btn=`<button class="btn-primary btn-sm" onclick="openReview(${i.id}, true)">Проверить</button>`; } else { if(i.stageId===CONFIG.STAGES.APPROVED) st='<span class="tag tag-green">Принято</span>'; else if(i.stageId===CONFIG.STAGES.REWORK) st='<span class="tag tag-red">Доработка</span>'; else if(i.stageId===CONFIG.STAGES.SENT_WITH_REMARKS) st='<span class="tag" style="background:#fff7ed; color:#c2410c; border:1px solid #fdba74;">Отправлено (Замеч.)</span>'; btn=`<button class="btn-outline btn-sm" onclick="openReview(${i.id}, false)">Просмотр</button>`; } const subId = i[CONFIG.RES_LINK_SUB]; const compId = subRealCompanyMap[subId]; const compName = subNameMap[compId] || '-'; t.innerHTML += `<tr><td><b>${i[CONFIG.RES_PRODUCT]}</b><div style="font-size:11px;color:#999">${new Date(i.createdTime).toLocaleDateString()}</div></td><td>${author}</td><td>${compName}</td><td>${st}</td><td>${btn}</td></tr>`; }); }
+    function openReview(id, isActionable) {
+        currentReviewId = id; document.getElementById('drawerFooter').style.display = isActionable ? 'flex' : 'none';
+        BX24.callMethod('crm.item.get', {entityTypeId:CONFIG.SP_RESULTS, id:id}, r=>{
+            const i = r.data().item;
+            document.getElementById('revProduct').innerText = i[CONFIG.RES_PRODUCT];
+            document.getElementById('revAuthor').innerText = usersMap[i.createdBy] || i.createdBy; 
+            let rawComm = i['ufCrm106_1764863374']; if(Array.isArray(rawComm)) rawComm = rawComm[0];
+            document.getElementById('revComment').innerText = String(rawComm || '-').replace(/📂 Ссылка.*/, ''); 
+            const filesContainer = document.getElementById('revFiles');
+            filesContainer.innerHTML = '<div class="spinner"></div>';
+            const folderPath = i[CONFIG.RES_FOLDER_PATH];
+            if(folderPath && folderPath.length > 1) {
+                serverCall('getYandexList', { path: folderPath }).then(files => {
+                    filesContainer.innerHTML = '';
+                    if(!files || !files.length) { filesContainer.innerHTML = '<div style="color:#999;font-size:12px;">Папка пуста</div>'; return; }
+                    const grid = document.createElement('div'); grid.className = 'files-list'; grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(90px, 1fr))';
+                    files.forEach(f => {
+                        const div = document.createElement('div'); div.className = 'file-item'; const isDir = f.TYPE === 'folder';
+                        div.innerHTML = `<i class="bi ${isDir?'bi-folder-fill folder':'bi-file-earmark-text text-primary'} file-icon"></i><div class="file-name">${f.NAME}</div>`;
+                        div.onclick = () => { if(!isDir && f.URL) safeOpen(f.URL); };
+                        grid.appendChild(div);
+                    });
+                    filesContainer.appendChild(grid);
+                }).catch(e => { filesContainer.innerHTML = '<div style="color:red">Ошибка загрузки файлов</div>'; });
+            } else { filesContainer.innerHTML = '<div style="color:#999; font-size:12px;">Вложений не найдено</div>'; }
+            const cmtBox = document.getElementById('revGipComment'); cmtBox.value = i['ufCrm106_1764863382'] || ''; cmtBox.disabled = !isActionable;
+            document.getElementById('drawerReview').style.display = 'flex';
+        });
+    }
+
+    function closeDrawer() { document.getElementById('drawerReview').style.display='none'; }
+    function submitReview(statusKey) { BX24.callMethod('crm.item.update', {entityTypeId:CONFIG.SP_RESULTS, id:currentReviewId, fields:{stageId:CONFIG.STAGES[statusKey], 'ufCrm106_1764863382':document.getElementById('revGipComment').value}}, ()=>{ closeDrawer(); alert('Сохранено'); loadSubcontractorChain(); }); }
+    function loadSubcontractorChain() { BX24.callMethod('crm.item.list', { entityTypeId: CONFIG.SP_SUB, filter: { 'parentId2': currentDeal.ID }, select: ['ID', 'TITLE', 'companyId'] }, async res => { const subs = res.data().items; if(!subs.length) return; let companyIds = new Set(); subs.forEach(s => { if(s.companyId) { companyIds.add(s.companyId); subRealCompanyMap[s.id] = s.companyId; } }); if(companyIds.size) { const comps = await new Promise(r => BX24.callMethod('crm.company.list', { filter: {'@ID': Array.from(companyIds)}, select: ['ID','TITLE'] }, x => r(x.data()))); comps.forEach(c => subNameMap[c.ID] = c.TITLE); } updateFilters(); contractProductsMap = {}; let promises = subs.map(s => { return new Promise(resolve => { BX24.callMethod('crm.item.productrow.list', { filter: { '=ownerType': 'T' + CONFIG.SP_SUB.toString(16), '=ownerId': s.id } }, r => { if(r.data() && r.data().productRows) { r.data().productRows.forEach(pr => { contractProductsMap[pr.productName] = { price: pr.price, companyId: s.companyId, companyName: subNameMap[s.companyId] || 'Неизвестно' }; }); } resolve(); }); }); }); await Promise.all(promises); loadStages(subs.map(s=>s.id)); loadReviews(subs.map(s=>s.id)); renderProducts(); }); }
+    function loadDealProducts() { 
+        const method = currentEntityType === 'deal' ? 'crm.deal.productrows.get' : 'crm.lead.productrows.get';
+        BX24.callMethod(method, {id: currentDeal.ID}, r=>{ dealProducts=r.data(); renderProducts(); }); 
+    }
+    function renderProducts() { const t = document.getElementById('productsTable'); if(!t) return; t.innerHTML = ''; const filter = document.getElementById('filterSubProducts').value; dealProducts.forEach(dp => { const name = dp.PRODUCT_NAME; const cleanProdName = name.replace(/['"]/g, '').trim(); const contract = contractProductsMap[name]; let tender = null; if (tenderProductsMap) { Object.keys(tenderProductsMap).forEach(key => { if (key.replace(/['"]/g, '').trim() === cleanProdName) tender = tenderProductsMap[key]; }); } if(filter !== 'all' && (!contract || contract.companyId != filter)) return; let company = '-', subPrice = '-', status = '<span class="tag tag-gray">Свободен</span>', action = ''; if(contract) { company = contract.companyName; subPrice = Math.round(contract.price).toLocaleString(); status = '<span class="tag tag-sub">На контракте</span>'; action = '-'; } else if (tender) { status = tender.status === 'WINNER' ? '<span class="tag tag-green">Тендер завершен</span>' : '<span class="tag tag-tender">На тендере</span>'; subPrice = `<span style="color:#f59e0b">~${Math.round(dp.PRICE)}</span>`; action = '-'; } else { action = `<button class="btn-primary btn-sm" style="padding:4px 8px;font-size:11px;" onclick="createTenderSmart('${name.replace(/'/g, "\\'")}', ${dp.PRICE}, ${dp.PRODUCT_ID})">В тендер</button>`; } t.innerHTML += `<tr><td><b>${name}</b></td><td>${company}</td><td style="text-align:right">${Math.round(dp.PRICE).toLocaleString()}</td><td style="text-align:right; font-weight:700; color:var(--primary);">${subPrice}</td><td>${status}</td><td>${action}</td></tr>`; }); }
+    function loadStages(subIds) { BX24.callMethod('crm.item.list', { entityTypeId: CONFIG.SP_STAGES, filter: { [CONFIG.FIELD_LINK_DEAL]: currentDeal.ID } }, res => { stageMap = res.data().items || []; renderStages(); }); }
+    function renderStages() { const t = document.getElementById('stagesList'); if(!t) return; t.innerHTML = ''; const filter = document.getElementById('filterSubStages').value; if(!stageMap || !stageMap.length) { t.innerHTML = '<tr><td colspan="5" style="text-align:center;">Пусто</td></tr>'; return; } stageMap.forEach(s => { const subId = s[CONFIG.FIELD_STAGE_SUB_ID]; const compId = subRealCompanyMap[subId]; if(filter !== 'all' && compId != filter) return; const prodTxt = parseProducts(s[CONFIG.FIELD_STAGE_PRODS]).map(p => p.name).join(', ') || '-'; const date = s[CONFIG.FIELD_STAGE_DATE] ? new Date(s[CONFIG.FIELD_STAGE_DATE]).toLocaleDateString() : '-'; const closed = s[CONFIG.FIELD_STAGE_STATUS].includes('SUCCESS'); t.innerHTML += `<tr><td><b>${s.title}</b></td><td>${subNameMap[compId]||'Неизвестно'}</td><td style="font-size:11px; white-space:normal; min-width:200px;">${prodTxt}</td><td>${date}</td><td>${closed?'<span class="tag tag-sub">Закрыт</span>':'<span class="tag tag-gray">В работе</span>'}</td></tr>`; }); }
+    function updateFilters() { const s = '<option value="all">Все исполнители</option>' + Object.keys(subNameMap).map(id=>`<option value="${id}">${subNameMap[id]}</option>`).join(''); ['filterSubStages','filterSubProducts'].forEach(id => { const el = document.getElementById(id); if(el) el.innerHTML = s; }); }
+    function parseProducts(r) { if(!r) return []; let l = Array.isArray(r) ? r : (typeof r === 'string' ? (r.startsWith('[')?JSON.parse(r):[r]) : [r]); return l.map(i => ({ name: (typeof i === 'object' ? i.name : (i.includes(':') && !isNaN(parseInt(i.split(':')[0])) ? i.split(':')[1].trim() : i)) })); }
+    
+    function loadGlobalCounters(deals) { 
+        const ids = deals.map(d=>d.ID); 
+        BX24.callMethod('crm.item.list', { entityTypeId: CONFIG.SP_SUB, filter: {'parentId2': ids}, select:['ID','parentId2'] }, r => { 
+            const subs = r.data().items; if(!subs.length) return; 
+            const subMap = {}; subs.forEach(s=>subMap[s.id]=s.parentId2); 
+            BX24.callMethod('crm.item.list', { entityTypeId: CONFIG.SP_RESULTS, filter: {stageId: CONFIG.STAGES.PREP, ['@'+'ufCrm106_1764863420']: Object.keys(subMap)}, select:['ID','ufCrm106_1764863420'] }, r2=>{ 
+                globalReviewCounts = {}; 
+                r2.data().items.forEach(i => { const d = subMap[i.ufCrm106_1764863420]; globalReviewCounts[d] = (globalReviewCounts[d]||0)+1; }); 
+                deals.forEach(d=>{ const el=document.getElementById('badge-deal-'+d.ID); if(el && globalReviewCounts[d.ID]) { el.innerText=globalReviewCounts[d.ID]; el.style.display='flex'; } }); 
+            }); 
+        }); 
+    }
+    
+    function updateReviewBadge(cnt) { const b = document.getElementById('badgeReviews'); if(b) { b.innerText = cnt; b.style.display = cnt > 0 ? 'inline-block' : 'none'; } if(currentDeal && currentEntityType==='deal') { globalReviewCounts[currentDeal.ID] = cnt; const cb = document.getElementById('badge-deal-'+currentDeal.ID); if(cb) { cb.innerText = cnt; cb.style.display = cnt > 0 ? 'flex' : 'none'; } } }
+    
+    // ===== ТОВАРЫ И ПОДЗАДАЧИ (ДЛЯ ГИПа) =====
+    async function loadStageProductsGip() {
+        const container = document.getElementById('productsContainer');
+        if (!currentDeal || !currentDeal.ID) { container.innerHTML = '<p style="color:#999">Проект не выбран</p>'; return; }
+        
+        container.innerHTML = '<div class="spinner"></div>';
+        
+        try {
+            let stagesResp = [];
+            
+            if (currentEntityType === 'deal') {
+                // Для сделок - загружаем этапы напрямую
+                stagesResp = await new Promise(resolve => {
+                    BX24.callMethod('crm.item.list', {
+                        entityTypeId: CONFIG.SP_STAGES,
+                        filter: { 'ufCrm86_1763852237': currentDeal.ID },  // Link to deal
+                        select: ['id', 'title', 'ufCrm86_1763845210']
+                    }, r => resolve(r.data().items || [])
+                    );
+                });
+            } else if (currentEntityType === 'lead') {
+                // Для лидов - используем API метод
+                stagesResp = await serverCall('getStagesForLead', { leadId: currentDeal.ID });
+                if (!stagesResp || !Array.isArray(stagesResp)) stagesResp = [];
+            }
+            
+            if (!stagesResp || !stagesResp.length) { container.innerHTML = '<p style="color:#999">Нет этапов</p>'; return; }
+            
+            // Обновим dropdown фильтра
+            const filterSelect = document.getElementById('filterSubProducts');
+            filterSelect.innerHTML = '<option value="all">Все этапы</option>';
+            stagesResp.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.title || 'Этап ' + s.id;
+                filterSelect.appendChild(opt);
+            });
+            
+            // Загружаем товары для первого этапа (или всех)
+            const stageId = stagesResp[0].id;
+            const stageProductsResp = await serverCall('getStageProducts', { stageId: stageId });
+            
+            if (!stageProductsResp || !stageProductsResp.length) {
+                container.innerHTML = '<p style="color:#999">Нет товаров</p>';
+                return;
+            }
+            
+            container.innerHTML = stageProductsResp.map(prod => `
+                <div class="gip-product-card" data-product-id="${prod.id}">
+                    <div class="product-header-gip" onclick="toggleProductExpand(this.closest('.gip-product-card'))">
+                        <div class="product-title-gip">
+                            <span class="product-toggle-gip">▸</span>
+                            <span>${prod.product_name || prod.title || 'Товар'}</span>
+                        </div>
+                        <span style="font-size:12px; color:var(--text-muted);">${prod.subtasks?.length || 0} подзадач</span>
+                    </div>
+                    <div class="product-deadlines-gip">
+                        <div class="deadline-box-gip">
+                            <div class="deadline-label-gip">Де-Юре</div>
+                            <div class="deadline-date-gip">${formatDate(prod.deadline_jure)}</div>
+                            <div class="deadline-status-gip">${prod.status_jure || '-'}</div>
+                        </div>
+                        <div class="deadline-box-gip">
+                            <div class="deadline-label-gip">Де-Факто</div>
+                            <div class="deadline-date-gip">${formatDate(prod.deadline_facto)}</div>
+                            <div class="deadline-status-gip">${prod.status_facto || '-'}</div>
+                        </div>
+                    </div>
+                    <div class="subtasks-container-gip">
+                        ${(prod.subtasks || []).map(st => {
+                            const statusClass = st.status === 'Готово' ? '' : st.status === 'Блокировано' ? 'blocked' : st.status === 'В работе' ? 'in-progress' : '';
+                            return `
+                                <div class="subtask-item-gip" data-subtask-id="${st.id}">
+                                    <input type="checkbox" class="subtask-checkbox-gip" ${st.status === 'Готово' ? 'checked' : ''} onchange="updateSubtaskStatusGip(${st.id}, this.checked)">
+                                    <div class="subtask-info-gip">
+                                        <div class="subtask-title-gip">${st.title || 'Подзадача'}</div>
+                                        <div class="subtask-meta-gip">
+                                            <span class="subtask-type-gip">${st.task_type || 'Прочее'}</span>
+                                            <span class="subtask-status-gip ${statusClass}">${st.status || 'Новая'}</span>
+                                            ${st.priority ? `<span style="background:#f0f0f0;padding:2px 6px;border-radius:4px;">${st.priority}</span>` : ''}
+                                            ${st.due_date ? `<span>📅 ${formatDate(st.due_date)}</span>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('loadStageProductsGip error:', e);
+            container.innerHTML = '<p style="color:red">Ошибка загрузки товаров</p>';
+        }
+    }
+    
+    function toggleProductExpand(el) {
+        el.classList.toggle('expanded');
+    }
+    
+    async function updateSubtaskStatusGip(subtaskId, isChecked) {
+        try {
+            const newStatus = isChecked ? 'Готово' : 'Новая';
+            await serverCall('updateSubtaskStatus', { subtaskId: subtaskId, status: newStatus });
+            console.log(`Подзадача ${subtaskId} обновлена: ${newStatus}`);
+        } catch (e) {
+            console.error('updateSubtaskStatusGip error:', e);
+            alert('Ошибка обновления статуса подзадачи');
+        }
+    }
+    
+    function filterProductsByStage() {
+        // Переload товаров для выбранного этапа
+        const filterVal = document.getElementById('filterSubProducts').value;
+        if (filterVal !== 'all') {
+            serverCall('getStageProducts', { stageId: filterVal }).then(products => {
+                const container = document.getElementById('productsContainer');
+                if (!products || !products.length) {
+                    container.innerHTML = '<p style="color:#999">Нет товаров для этого этапа</p>';
+                    return;
+                }
+                // Перерисовываем товары...
+                loadStageProductsGip();
+            });
+        } else {
+            loadStageProductsGip();
+        }
+    }
+    
+    function formatDate(s) {
+        try { return s ? new Date(s).toLocaleDateString('ru') : '-'; }
+        catch (e) { return s; }
+    }
+</script>
+</body>
+</html>
